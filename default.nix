@@ -1,5 +1,7 @@
-with import <nixpkgs> {};
-stdenv.mkDerivation rec {
+{ pkgs ? import <nixpkgs> {} }:
+let
+  inherit (pkgs) lib stdenv musl;
+in stdenv.mkDerivation rec {
   name = "nix-ld";
   src = ./.;
 
