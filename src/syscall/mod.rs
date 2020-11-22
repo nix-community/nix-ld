@@ -8,41 +8,51 @@ pub mod platform;
 
 pub use platform::*;
 
-#[macro_export]
 macro_rules! syscall {
     ($nr:ident)
-        => ( syscall::syscall0($nr) );
+        => ( syscall0($nr) );
 
     ($nr:ident, $a1:expr)
-        => ( syscall::syscall1($nr,
+        => ( syscall1($nr,
                 $a1 as usize) );
 
     ($nr:ident, $a1:expr, $a2:expr)
-        => ( syscall::syscall2($nr,
+        => ( syscall2($nr,
                 $a1 as usize, $a2 as usize) );
 
     ($nr:ident, $a1:expr, $a2:expr, $a3:expr)
-        => ( syscall::syscall3($nr,
+        => ( syscall3($nr,
                 $a1 as usize, $a2 as usize, $a3 as usize) );
 
     ($nr:ident, $a1:expr, $a2:expr, $a3:expr, $a4:expr)
-        => ( syscall::syscall4($nr,
+        => ( syscall4($nr,
                 $a1 as usize, $a2 as usize, $a3 as usize,
                 $a4 as usize) );
 
     ($nr:ident, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr)
-        => ( syscall::syscall5($nr,
+        => ( syscall5($nr,
                 $a1 as usize, $a2 as usize, $a3 as usize,
                 $a4 as usize, $a5 as usize) );
 
     ($nr:ident, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr, $a6:expr)
-        => ( syscall::syscall6($nr,
+        => ( syscall6($nr,
                 $a1 as usize, $a2 as usize, $a3 as usize,
                 $a4 as usize, $a5 as usize, $a6 as usize) );
 
     ($nr:ident, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr, $a6:expr, $a7:expr)
-        => ( syscall::syscall7($nr,
+        => ( syscall7($nr,
                 $a1 as usize, $a2 as usize, $a3 as usize,
                 $a4 as usize, $a5 as usize, $a6 as usize,
                 $a7 as usize) );
+}
+
+
+pub unsafe fn write(fd: u32, buf: *const u8, count: usize) {
+    let syscall_number: usize = 1;
+    syscall!(syscall_number, fd, buf, count);
+}
+
+pub unsafe fn exit(code: i32) {
+    let syscall_number: usize = 60;
+    syscall!(syscall_number, code);
 }

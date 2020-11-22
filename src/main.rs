@@ -12,11 +12,9 @@ use core::mem::size_of;
 mod print;
 mod memcpy;
 mod unwind_resume;
-mod exit;
 mod start;
 mod syscall;
 
-use crate::exit::exit;
 use crate::print::println;
 pub use crate::start::_start;
 
@@ -54,5 +52,5 @@ pub unsafe fn main(stack_top: *const u8) {
         println(arg);
     }
 
-    exit(argc as i32 - 1);
+    syscall::exit(argc as i32 - 1);
 }
