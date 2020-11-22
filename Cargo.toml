@@ -8,3 +8,7 @@ edition = "2018"
 
 [dependencies]
 static-alloc = "0.2.*"
+
+[dependencies.libc]
+version = "0.2.80"
+default-features = false

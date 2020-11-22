@@ -1,2 +1,0 @@
-[target.'cfg(target_os = "linux")']
-rustflags = ["-C", "link-arg=-nostartfiles", "-C", "link-arg=-static"]

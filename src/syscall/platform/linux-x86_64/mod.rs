@@ -1,8 +1,10 @@
 //! This library was built for x86-64 Linux.
 
+use libc::c_long;
+
 #[inline(always)]
-pub unsafe fn syscall0(n: usize) -> usize {
-    let ret : usize;
+pub unsafe fn syscall0(n: c_long) -> c_long {
+    let ret: c_long;
     asm!("syscall",
          inout("rax") n => ret,
          lateout("rcx") _, lateout("r11") _,
@@ -11,8 +13,8 @@ pub unsafe fn syscall0(n: usize) -> usize {
 }
 
 #[inline(always)]
-pub unsafe fn syscall1(n: usize, a1: usize) -> usize {
-    let ret : usize;
+pub unsafe fn syscall1(n: c_long, a1: c_long) -> c_long {
+    let ret: c_long;
     asm!("syscall",
          inout("rax") n => ret,
          in("rdi") a1,
@@ -22,8 +24,8 @@ pub unsafe fn syscall1(n: usize, a1: usize) -> usize {
 }
 
 #[inline(always)]
-pub unsafe fn syscall2(n: usize, a1: usize, a2: usize) -> usize {
-    let ret : usize;
+pub unsafe fn syscall2(n: c_long, a1: c_long, a2: c_long) -> c_long {
+    let ret: c_long;
     asm!("syscall",
          inout("rax") n => ret,
          in("rdi") a1,
@@ -34,8 +36,8 @@ pub unsafe fn syscall2(n: usize, a1: usize, a2: usize) -> usize {
 }
 
 #[inline(always)]
-pub unsafe fn syscall3(n: usize, a1: usize, a2: usize, a3: usize) -> usize {
-    let ret : usize;
+pub unsafe fn syscall3(n: c_long, a1: c_long, a2: c_long, a3: c_long) -> c_long {
+    let ret: c_long;
     asm!("syscall",
          inout("rax") n => ret,
          in("rdi") a1,
@@ -47,9 +49,8 @@ pub unsafe fn syscall3(n: usize, a1: usize, a2: usize, a3: usize) -> usize {
 }
 
 #[inline(always)]
-pub unsafe fn syscall4(n: usize, a1: usize, a2: usize, a3: usize,
-                                a4: usize) -> usize {
-    let ret : usize;
+pub unsafe fn syscall4(n: c_long, a1: c_long, a2: c_long, a3: c_long, a4: c_long) -> c_long {
+    let ret: c_long;
     asm!("syscall",
          inout("rax") n => ret,
          in("rdi") a1,
@@ -62,9 +63,15 @@ pub unsafe fn syscall4(n: usize, a1: usize, a2: usize, a3: usize,
 }
 
 #[inline(always)]
-pub unsafe fn syscall5(n: usize, a1: usize, a2: usize, a3: usize,
-                                a4: usize, a5: usize) -> usize {
-    let ret : usize;
+pub unsafe fn syscall5(
+    n: c_long,
+    a1: c_long,
+    a2: c_long,
+    a3: c_long,
+    a4: c_long,
+    a5: c_long,
+) -> c_long {
+    let ret: c_long;
     asm!("syscall",
          inout("rax") n => ret,
          in("rdi") a1,
@@ -78,9 +85,16 @@ pub unsafe fn syscall5(n: usize, a1: usize, a2: usize, a3: usize,
 }
 
 #[inline(always)]
-pub unsafe fn syscall6(n: usize, a1: usize, a2: usize, a3: usize,
-                                a4: usize, a5: usize, a6: usize) -> usize {
-    let ret : usize;
+pub unsafe fn syscall6(
+    n: c_long,
+    a1: c_long,
+    a2: c_long,
+    a3: c_long,
+    a4: c_long,
+    a5: c_long,
+    a6: c_long,
+) -> c_long {
+    let ret: c_long;
     asm!("syscall",
          inout("rax") n => ret,
          in("rdi") a1,

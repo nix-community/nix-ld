@@ -4,16 +4,21 @@
 #![feature(naked_functions)]
 #![feature(lang_items)]
 #![feature(default_alloc_error_handler)]
+#![feature(link_args)]
+
+#[allow(unused_attributes)]
+#[link_args = "-nostartfiles -static"]
+extern "C" {}
 
 use static_alloc::Bump;
 
 use core::mem::size_of;
 
-mod print;
 mod memcpy;
-mod unwind_resume;
+mod print;
 mod start;
 mod syscall;
+mod unwind_resume;
 
 use crate::print::println;
 pub use crate::start::_start;

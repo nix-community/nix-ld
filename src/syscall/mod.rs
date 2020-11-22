@@ -1,58 +1,85 @@
-#[cfg(all(target_os="linux", target_arch="x86_64"))]
-#[path="platform/linux-x86_64/mod.rs"]
+use libc::{c_long, c_int, size_t, ssize_t, c_void};
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[path = "platform/linux-x86_64/mod.rs"]
 pub mod platform;
 
-#[cfg(all(target_os="linux", target_arch="aarch64"))]
-#[path="platform/linux-aarch64/mod.rs"]
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+#[path = "platform/linux-aarch64/mod.rs"]
 pub mod platform;
 
 pub use platform::*;
 
 macro_rules! syscall {
-    ($nr:ident)
-        => ( syscall0($nr) );
+    ($nr:expr) => {
+        syscall0($nr)
+    };
 
-    ($nr:ident, $a1:expr)
-        => ( syscall1($nr,
-                $a1 as usize) );
+    ($nr:expr, $a1:expr) => {
+        syscall1($nr, $a1 as c_long)
+    };
 
-    ($nr:ident, $a1:expr, $a2:expr)
-        => ( syscall2($nr,
-                $a1 as usize, $a2 as usize) );
+    ($nr:expr, $a1:expr, $a2:expr) => {
+        syscall2($nr, $a1 as c_long, $a2 as c_long)
+    };
 
-    ($nr:ident, $a1:expr, $a2:expr, $a3:expr)
-        => ( syscall3($nr,
-                $a1 as usize, $a2 as usize, $a3 as usize) );
+    ($nr:expr, $a1:expr, $a2:expr, $a3:expr) => {
+        syscall3($nr, $a1 as c_long, $a2 as c_long, $a3 as c_long)
+    };
 
-    ($nr:ident, $a1:expr, $a2:expr, $a3:expr, $a4:expr)
-        => ( syscall4($nr,
-                $a1 as usize, $a2 as usize, $a3 as usize,
-                $a4 as usize) );
+    ($nr:expr, $a1:expr, $a2:expr, $a3:expr, $a4:expr) => {
+        syscall4(
+            $nr,
+            $a1 as c_long,
+            $a2 as c_long,
+            $a3 as c_long,
+            $a4 as c_long,
+        )
+    };
 
-    ($nr:ident, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr)
-        => ( syscall5($nr,
-                $a1 as usize, $a2 as usize, $a3 as usize,
-                $a4 as usize, $a5 as usize) );
+    ($nr:expr, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr) => {
+        syscall5(
+            $nr,
+            $a1 as c_long,
+            $a2 as c_long,
+            $a3 as c_long,
+            $a4 as c_long,
+            $a5 as c_long,
+        )
+    };
 
-    ($nr:ident, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr, $a6:expr)
-        => ( syscall6($nr,
-                $a1 as usize, $a2 as usize, $a3 as usize,
-                $a4 as usize, $a5 as usize, $a6 as usize) );
+    ($nr:expr, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr, $a6:expr) => {
+        syscall6(
+            $nr,
+            $a1 as c_long,
+            $a2 as c_long,
+            $a3 as c_long,
+            $a4 as c_long,
+            $a5 as c_long,
+            $a6 as c_long,
+        )
+    };
 
-    ($nr:ident, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr, $a6:expr, $a7:expr)
-        => ( syscall7($nr,
-                $a1 as usize, $a2 as usize, $a3 as usize,
-                $a4 as usize, $a5 as usize, $a6 as usize,
-                $a7 as usize) );
+    ($nr:expr, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr, $a6:expr, $a7:expr) => {
+        syscall7(
+            $nr,
+            $a1 as c_long,
+            $a2 as c_long,
+            $a3 as c_long,
+            $a4 as c_long,
+            $a5 as c_long,
+            $a6 as c_long,
+            $a7 as c_long,
+        )
+    };
 }
 
+//pub unsafe fn writev(fd: usize, const struct iovec *iov, int iovcnt);
 
-pub unsafe fn write(fd: u32, buf: *const u8, count: usize) {
-    let syscall_number: usize = 1;
-    syscall!(syscall_number, fd, buf, count);
+pub unsafe fn write(fd: c_int, buf: *const c_void, count: size_t) -> ssize_t {
+    syscall!(libc::SYS_write, fd, buf, count) as isize
 }
 
-pub unsafe fn exit(code: i32) {
-    let syscall_number: usize = 60;
-    syscall!(syscall_number, code);
+pub unsafe fn exit(code: c_int) {
+    syscall!(libc::SYS_exit, code);
 }
