@@ -11,13 +11,15 @@ extern "C" {}
 
 use core::mem::size_of;
 use core::str;
+use libc::c_int;
 
+mod fd;
 mod print;
 mod start;
 mod string;
 mod syscall;
 mod unwind_resume;
-use core::fmt::Write;
+use core::fmt::{self, Write};
 use core::slice::from_raw_parts as mkslice;
 
 use crate::print::PrintBuffer;
@@ -43,16 +45,16 @@ pub unsafe fn strlen(mut s: *const u8) -> usize {
     count
 }
 
-const NIX_LD: &'static str = "NIX_LD=";
-const NIX_LD_LIB_PATH: &'static str = "NIX_LD_LIBRARY_PATH=";
+const NIX_LD: &'static [u8] = b"NIX_LD=";
+const NIX_LD_LIB_PATH: &'static [u8] = b"NIX_LD_LIBRARY_PATH=";
 
 struct LdConfig {
-    exe: Option<&'static str>,
-    lib_path: Option<&'static str>,
+    exe: Option<&'static [u8]>,
+    lib_path: Option<&'static [u8]>,
 }
 
-unsafe fn str_slice_from_ptr(ptr: *const u8) -> &'static str {
-    str::from_utf8_unchecked(mkslice(ptr, strlen(ptr)))
+unsafe fn slice_from_ptr(ptr: *const u8) -> &'static [u8] {
+    mkslice(ptr, strlen(ptr))
 }
 
 unsafe fn process_env(mut envp: *const *const u8) -> LdConfig {
@@ -61,7 +63,7 @@ unsafe fn process_env(mut envp: *const *const u8) -> LdConfig {
         lib_path: None,
     };
     while !(*envp).is_null() {
-        let var = str_slice_from_ptr(*envp);
+        let var = slice_from_ptr(*envp);
         if var.starts_with(NIX_LD) {
             config.exe = Some(&var[NIX_LD.len()..]);
         };
@@ -74,21 +76,39 @@ unsafe fn process_env(mut envp: *const *const u8) -> LdConfig {
     config
 }
 
-unsafe fn exe_name(args: &[*const u8]) -> &str {
-    if args.len() > 0 {
-        str_slice_from_ptr(args[0])
-    } else {
-        ""
+struct PrintableBytes<'a> {
+  data: &'a [u8]
+}
+
+impl<'a> fmt::Display for PrintableBytes<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        unsafe {
+            write!(f, "{}", str::from_utf8_unchecked(self.data))
+        }
     }
 }
+
+unsafe fn exe_name(args: &[*const u8]) -> &[u8] {
+    if args.len() > 0 {
+        slice_from_ptr(args[0])
+    } else {
+        b""
+    }
+}
+
+#[cfg(target_pointer_width = "32")]
+type ElfHeader = libc::Elf32_Phdr;
+
+#[cfg(target_pointer_width = "64")]
+type ElfHeader = libc::Elf64_Phdr;
 
 /// # Safety
 ///
 /// This function performs unsafe pointer aritmethic
 #[no_mangle]
 pub unsafe fn main(stack_top: *const u8) {
-    let argc = *(stack_top as *const isize);
-    let argv = stack_top.add(size_of::<*const isize>()) as *const *const u8;
+    let argc = *(stack_top as *const c_int);
+    let argv = stack_top.add(size_of::<*const c_int>()) as *const *const u8;
     let envp = argv.add(argc as usize + 1) as *const *const u8;
 
     let args = mkslice(argv, argc as usize);
@@ -102,12 +122,14 @@ pub unsafe fn main(stack_top: *const u8) {
         eprint!(
             buf,
             "Cannot execute binary {}: No NIX_LD environment variable set",
-            exe_name(args)
+            PrintableBytes { data: exe_name(args) }
         );
+        syscall::exit(1);
     }
+    let fd = fd::open(ld_config.exe.unwrap(), libc::O_RDONLY);
 
     if let Some(lib_path) = ld_config.lib_path {
-        eprint!(buf, "ld_library_path: {}\n", lib_path);
+        eprint!(buf, "ld_library_path: {}\n", PrintableBytes{data: lib_path});
     }
 
     syscall::exit(0);
