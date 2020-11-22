@@ -1,4 +1,4 @@
-use libc::{c_long, c_int, size_t, ssize_t, c_void};
+use libc::{c_char, c_int, c_long, c_void, off_t, size_t, ssize_t};
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[path = "platform/linux-x86_64/mod.rs"]
@@ -74,10 +74,35 @@ macro_rules! syscall {
     };
 }
 
-//pub unsafe fn writev(fd: usize, const struct iovec *iov, int iovcnt);
+pub unsafe fn mmap(
+    addr: *const c_void,
+    length: size_t,
+    prot: c_int,
+    flags: c_int,
+    fd: c_int,
+    offset: off_t,
+) -> *mut c_void {
+    syscall!(libc::SYS_mmap, addr, length, prot, flags, fd, offset) as *mut c_void
+}
+
+pub unsafe fn munmap(addr: *const c_void, length: size_t) -> *mut c_void {
+    syscall!(libc::SYS_munmap, addr, length) as *mut c_void
+}
+
+pub unsafe fn open(pathname: *const c_char, flags: c_int) -> c_int {
+    syscall!(libc::SYS_open, pathname, flags) as c_int
+}
+
+pub unsafe fn read(fd: c_int, buf: *mut c_void, count: size_t) -> ssize_t {
+    syscall!(libc::SYS_read, fd, buf, count) as ssize_t
+}
+
+pub unsafe fn close(fd: c_int) -> c_int {
+    syscall!(libc::SYS_open, fd) as c_int
+}
 
 pub unsafe fn write(fd: c_int, buf: *const c_void, count: size_t) -> ssize_t {
-    syscall!(libc::SYS_write, fd, buf, count) as isize
+    syscall!(libc::SYS_write, fd, buf, count) as ssize_t
 }
 
 pub unsafe fn exit(code: c_int) {
