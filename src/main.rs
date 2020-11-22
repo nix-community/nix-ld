@@ -7,14 +7,14 @@
 
 #[allow(unused_attributes)]
 #[link_args = "-nostartfiles -static"]
-extern {}
+extern "C" {}
 
 use core::mem::size_of;
 use core::str;
 
-mod string;
 mod print;
 mod start;
+mod string;
 mod syscall;
 mod unwind_resume;
 use core::fmt::Write;
@@ -43,8 +43,8 @@ pub unsafe fn strlen(mut s: *const u8) -> usize {
     count
 }
 
-const NIX_LD : &'static str = "NIX_LD=";
-const NIX_LD_LIB_PATH : &'static str = "NIX_LD_LIBRARY_PATH=";
+const NIX_LD: &'static str = "NIX_LD=";
+const NIX_LD_LIB_PATH: &'static str = "NIX_LD_LIBRARY_PATH=";
 
 struct LdConfig {
     exe: Option<&'static str>,
@@ -56,7 +56,10 @@ unsafe fn str_slice_from_ptr(ptr: *const u8) -> &'static str {
 }
 
 unsafe fn process_env(mut envp: *const *const u8) -> LdConfig {
-    let mut config = LdConfig { exe: None, lib_path: None };
+    let mut config = LdConfig {
+        exe: None,
+        lib_path: None,
+    };
     while !(*envp).is_null() {
         let var = str_slice_from_ptr(*envp);
         if var.starts_with(NIX_LD) {
@@ -96,7 +99,11 @@ pub unsafe fn main(stack_top: *const u8) {
     let mut buf = PrintBuffer::new(&mut buf[..]);
 
     if ld_config.exe.is_none() {
-        eprint!(buf, "Cannot execute binary {}: No NIX_LD environment variable set", exe_name(args));
+        eprint!(
+            buf,
+            "Cannot execute binary {}: No NIX_LD environment variable set",
+            exe_name(args)
+        );
     }
 
     if let Some(lib_path) = ld_config.lib_path {

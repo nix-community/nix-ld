@@ -1,5 +1,5 @@
-use libc::{c_void, c_int, size_t};
 use core::mem;
+use libc::{c_int, c_void, size_t};
 
 #[no_mangle]
 pub unsafe extern "C" fn memcpy(s1: *mut c_void, s2: *const c_void, n: size_t) -> *mut c_void {

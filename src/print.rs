@@ -1,7 +1,7 @@
 use crate::syscall::write;
 use core::fmt;
 use core::str;
-use libc::{STDOUT_FILENO, STDERR_FILENO};
+use libc::{STDERR_FILENO, STDOUT_FILENO};
 
 pub struct PrintBuffer<'a> {
     buf: &'a mut [u8],
@@ -43,13 +43,21 @@ impl fmt::Write for PrintBuffer<'_> {
 
 pub fn print(s: &[u8]) {
     unsafe {
-        write(STDOUT_FILENO as i32, s.as_ptr() as *const libc::c_void, s.len());
+        write(
+            STDOUT_FILENO as i32,
+            s.as_ptr() as *const libc::c_void,
+            s.len(),
+        );
     }
 }
 
 pub fn eprint(s: &[u8]) {
     unsafe {
-        write(STDERR_FILENO as i32, s.as_ptr() as *const libc::c_void, s.len());
+        write(
+            STDERR_FILENO as i32,
+            s.as_ptr() as *const libc::c_void,
+            s.len(),
+        );
     }
 }
 
