@@ -6,13 +6,19 @@
 #![feature(default_alloc_error_handler)]
 
 use static_alloc::Bump;
+
+use core::mem::size_of;
+
 mod print;
 mod memcpy;
 mod unwind_resume;
 mod exit;
+mod start;
+mod syscall;
 
 use crate::exit::exit;
 use crate::print::println;
+pub use crate::start::_start;
 
 extern crate alloc;
 
@@ -38,8 +44,8 @@ pub unsafe fn strlen(mut s: *const u8) -> usize {
 
 #[no_mangle]
 pub unsafe fn main(stack_top: *const u8) {
-    let argc = *(stack_top as *const u64);
-    let argv = stack_top.add(8) as *const *const u8;
+    let argc = *(stack_top as *const isize);
+    let argv = stack_top.add(size_of::<*const isize>()) as *const *const u8;
     use core::slice::from_raw_parts as mkslice;
     let args = mkslice(argv, argc as usize);
 
