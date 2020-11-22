@@ -1,3 +1,6 @@
+/// # Safety
+///
+/// This function is the entrypoint into our link-loader
 #[no_mangle]
 #[naked]
 pub unsafe fn _start() {

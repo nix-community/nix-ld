@@ -36,6 +36,9 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
+/// # Safety
+///
+/// This function performs unsafe pointer aritmethic
 pub unsafe fn strlen(mut s: *const u8) -> usize {
     let mut count = 0;
     while *s != b'\0' {
@@ -45,6 +48,9 @@ pub unsafe fn strlen(mut s: *const u8) -> usize {
     count
 }
 
+/// # Safety
+///
+/// This function performs unsafe pointer aritmethic
 #[no_mangle]
 pub unsafe fn main(stack_top: *const u8) {
     let argc = *(stack_top as *const isize);

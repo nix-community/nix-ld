@@ -2,13 +2,13 @@ use libc::{c_long, c_int, size_t, ssize_t, c_void};
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[path = "platform/linux-x86_64/mod.rs"]
-pub mod platform;
+mod platform;
 
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
 #[path = "platform/linux-aarch64/mod.rs"]
-pub mod platform;
+mod platform;
 
-pub use platform::*;
+use platform::*;
 
 macro_rules! syscall {
     ($nr:expr) => {
