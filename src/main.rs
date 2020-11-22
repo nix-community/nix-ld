@@ -5,13 +5,11 @@
 #![feature(lang_items)]
 #![feature(link_args)]
 
-
 #[allow(unused_attributes)]
 #[link_args = "-nostartfiles -static"]
 extern {}
 
 use core::mem::size_of;
-use core::fmt::{self, Write};
 use core::str;
 
 mod string;
@@ -19,8 +17,9 @@ mod print;
 mod start;
 mod syscall;
 mod unwind_resume;
+use core::fmt::Write;
 
-use crate::print::println;
+use crate::print::{PrintBuffer, print};
 pub use crate::start::_start;
 
 #[lang = "eh_personality"]
@@ -67,61 +66,6 @@ where
 const NIX_LD : &[u8; 7] = b"NIX_LD=";
 const NIX_LD_LIB_PATH : &[u8; 20] = b"NIX_LD_LIBRARY_PATH=";
 
-
-pub struct ByteMutWriter<'a> {
-    buf: &'a mut [u8],
-    cursor: usize,
-}
-
-impl<'a> ByteMutWriter<'a> {
-    pub fn new(buf: &'a mut [u8]) -> Self {
-        ByteMutWriter { buf, cursor: 0 }
-    }
-
-    pub fn as_str(&self) -> &str {
-        str::from_utf8(&self.buf[0..self.cursor]).unwrap()
-    }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        return self.buf;
-    }
-
-    #[inline]
-    pub fn capacity(&self) -> usize {
-        self.buf.len()
-    }
-
-    pub fn clear(&mut self) {
-        self.cursor = 0;
-    }
-
-    pub fn len(&self) -> usize {
-        self.cursor
-    }
-
-    pub fn empty(&self) -> bool {
-        self.cursor == 0
-    }
-
-    pub fn full(&self) -> bool {
-        self.capacity() == self.cursor
-    }
-}
-
-impl fmt::Write for ByteMutWriter<'_> {
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        let cap = self.capacity();
-        for (i, &b) in self.buf[self.cursor..cap]
-            .iter_mut()
-            .zip(s.as_bytes().iter())
-        {
-            *i = b;
-        }
-        self.cursor = usize::min(cap, self.cursor + s.as_bytes().len());
-        Ok(())
-    }
-}
-
 /// # Safety
 ///
 /// This function performs unsafe pointer aritmethic
@@ -134,9 +78,12 @@ pub unsafe fn main(stack_top: *const u8) {
     use core::slice::from_raw_parts as mkslice;
     let args = mkslice(argv, argc as usize);
 
+    let mut buf = [0u8; 4096];
+    let mut buf = PrintBuffer::new(&mut buf[..]);
+
     for &arg in args {
         let arg = mkslice(arg, strlen(arg));
-        println(arg);
+        print(arg);
     }
 
     let mut nix_ld: Option<&[u8]> = None;
@@ -155,18 +102,12 @@ pub unsafe fn main(stack_top: *const u8) {
         envp = envp.add(1);
     }
 
-    let mut buf = [0u8; 4096];
-    let mut buf = ByteMutWriter::new(&mut buf[..]);
-
     if let Some(ld) = nix_ld {
-        write!(&mut buf, "ld_path {}", str::from_utf8_unchecked(ld));
-        println(buf.as_bytes());
+        print!(buf, "ld_path {}\n", str::from_utf8_unchecked(ld));
     }
 
     if let Some(ld_lib_path) = nix_ld_lib_path {
-        buf.clear();
-        write!(&mut buf, "ld_library_path: {}", str::from_utf8_unchecked(ld_lib_path));
-        println(buf.as_bytes());
+        eprint!(buf, "ld_library_path: {}\n", str::from_utf8_unchecked(ld_lib_path));
     }
 
     syscall::exit(argc as i32 - 1);
