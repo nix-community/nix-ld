@@ -9,22 +9,21 @@
 #[link_args = "-nostartfiles -static"]
 extern "C" {}
 
-
+mod errno;
+mod exit;
 mod fd;
 mod print;
 mod start;
 mod string;
 mod syscall;
 mod unwind_resume;
-mod errno;
-mod exit;
 
-use exit::exit;
-use core::mem::size_of;
-use core::str;
-use libc::{c_void, c_int};
 use core::fmt::{self, Write};
+use core::mem::size_of;
 use core::slice::from_raw_parts as mkslice;
+use core::str;
+use exit::exit;
+use libc::{c_int, c_void};
 
 use crate::print::PrintBuffer;
 pub use crate::start::_start;
@@ -81,14 +80,12 @@ unsafe fn process_env(mut envp: *const *const u8) -> LdConfig {
 }
 
 struct PrintableBytes<'a> {
-  data: &'a [u8]
+    data: &'a [u8],
 }
 
 impl<'a> fmt::Display for PrintableBytes<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        unsafe {
-            write!(f, "{}", str::from_utf8_unchecked(self.data))
-        }
+        unsafe { write!(f, "{}", str::from_utf8_unchecked(self.data)) }
     }
 }
 
@@ -98,7 +95,7 @@ unsafe fn exe_name(args: &[*const u8]) -> PrintableBytes {
             slice_from_ptr(args[0])
         } else {
             b""
-        }
+        },
     }
 }
 
@@ -108,7 +105,6 @@ type ElfHeader = libc::Elf32_Phdr;
 #[cfg(target_pointer_width = "64")]
 type ElfHeader = libc::Elf64_Phdr;
 
-
 unsafe fn load_elf(buf: &mut PrintBuffer, args: &[*const u8], ld_exe: &[u8]) -> Result<(), ()> {
     let fd = match fd::open(ld_exe, libc::O_RDONLY) {
         Ok(fd) => fd,
@@ -117,7 +113,7 @@ unsafe fn load_elf(buf: &mut PrintBuffer, args: &[*const u8], ld_exe: &[u8]) -> 
                 buf,
                 "cannot execute {}: cannot open link loader {}: {} ({})",
                 exe_name(args),
-                PrintableBytes{ data: ld_exe },
+                PrintableBytes { data: ld_exe },
                 errno::strerror(num),
                 num
             );
@@ -133,9 +129,12 @@ unsafe fn load_elf(buf: &mut PrintBuffer, args: &[*const u8], ld_exe: &[u8]) -> 
         p_offset: 0,
         p_paddr: 0,
         p_type: 0,
-        p_vaddr: 0
+        p_vaddr: 0,
     };
-    fd.read((&mut header as *mut ElfHeader) as *mut c_void, size_of::<ElfHeader>());
+    fd.read(
+        (&mut header as *mut ElfHeader) as *mut c_void,
+        size_of::<ElfHeader>(),
+    );
     Ok(())
 }
 
@@ -163,12 +162,16 @@ pub unsafe fn main(stack_top: *const u8) {
                 exe_name(args)
             );
             exit(1);
-        },
-        Some(s) => s
+        }
+        Some(s) => s,
     };
 
     if let Some(lib_path) = ld_config.lib_path {
-        eprint!(buf, "ld_library_path: {}\n", PrintableBytes{data: lib_path});
+        eprint!(
+            buf,
+            "ld_library_path: {}\n",
+            PrintableBytes { data: lib_path }
+        );
     }
 
     if load_elf(&mut buf, args, ld_exe).is_err() {
