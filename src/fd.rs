@@ -1,4 +1,4 @@
-use libc::c_int;
+use libc::{c_int, c_void, size_t};
 use crate::syscall;
 
 pub struct Fd {
@@ -7,6 +7,11 @@ pub struct Fd {
 impl Fd {
     pub fn new(fd: c_int) -> Fd {
         Fd { num: fd }
+    }
+    pub fn read(&self, buf: *mut c_void, count: size_t) -> libc::ssize_t {
+        unsafe {
+            syscall::read(self.num, buf, count)
+        }
     }
 }
 
@@ -18,6 +23,7 @@ pub fn open(pathname: &[u8], flags: c_int) -> Result<Fd, c_int> {
         Ok(Fd {num: res})
     }
 }
+
 
 
 impl Drop for Fd {

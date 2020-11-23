@@ -98,7 +98,7 @@ pub unsafe fn read(fd: c_int, buf: *mut c_void, count: size_t) -> ssize_t {
 }
 
 pub unsafe fn close(fd: c_int) -> c_int {
-    syscall!(libc::SYS_open, fd) as c_int
+    syscall!(libc::SYS_close, fd) as c_int
 }
 
 pub unsafe fn write(fd: c_int, buf: *const c_void, count: size_t) -> ssize_t {

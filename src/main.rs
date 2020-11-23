@@ -9,9 +9,6 @@
 #[link_args = "-nostartfiles -static"]
 extern "C" {}
 
-use core::mem::size_of;
-use core::str;
-use libc::c_int;
 
 mod fd;
 mod print;
@@ -19,8 +16,13 @@ mod start;
 mod string;
 mod syscall;
 mod unwind_resume;
+mod errno;
 mod exit;
+
 use exit::exit;
+use core::mem::size_of;
+use core::str;
+use libc::{c_void, c_int};
 use core::fmt::{self, Write};
 use core::slice::from_raw_parts as mkslice;
 
@@ -90,11 +92,13 @@ impl<'a> fmt::Display for PrintableBytes<'a> {
     }
 }
 
-unsafe fn exe_name(args: &[*const u8]) -> &[u8] {
-    if args.len() > 0 {
-        slice_from_ptr(args[0])
-    } else {
-        b""
+unsafe fn exe_name(args: &[*const u8]) -> PrintableBytes {
+    PrintableBytes {
+        data: if args.len() > 0 {
+            slice_from_ptr(args[0])
+        } else {
+            b""
+        }
     }
 }
 
@@ -103,6 +107,37 @@ type ElfHeader = libc::Elf32_Phdr;
 
 #[cfg(target_pointer_width = "64")]
 type ElfHeader = libc::Elf64_Phdr;
+
+
+unsafe fn load_elf(buf: &mut PrintBuffer, args: &[*const u8], ld_exe: &[u8]) -> Result<(), ()> {
+    let fd = match fd::open(ld_exe, libc::O_RDONLY) {
+        Ok(fd) => fd,
+        Err(num) => {
+            eprint!(
+                buf,
+                "cannot execute {}: cannot open link loader {}: {} ({})",
+                exe_name(args),
+                PrintableBytes{ data: ld_exe },
+                errno::strerror(num),
+                num
+            );
+            return Err(());
+        }
+    };
+
+    let mut header = ElfHeader {
+        p_align: 0,
+        p_filesz: 0,
+        p_flags: 0,
+        p_memsz: 0,
+        p_offset: 0,
+        p_paddr: 0,
+        p_type: 0,
+        p_vaddr: 0
+    };
+    fd.read((&mut header as *mut ElfHeader) as *mut c_void, size_of::<ElfHeader>());
+    Ok(())
+}
 
 /// # Safety
 ///
@@ -120,20 +155,25 @@ pub unsafe fn main(stack_top: *const u8) {
     let mut buf = [0u8; 4096];
     let mut buf = PrintBuffer::new(&mut buf[..]);
 
-    if ld_config.exe.is_none() {
-        eprint!(
-            buf,
-            "Cannot execute binary {}: No NIX_LD environment variable set",
-            PrintableBytes { data: exe_name(args) }
-        );
-        syscall::exit(1);
-    }
-    let fd = fd::open(ld_config.exe.unwrap(), libc::O_RDONLY);
+    let ld_exe = match ld_config.exe {
+        None => {
+            eprint!(
+                buf,
+                "Cannot execute binary {}: No NIX_LD environment variable set",
+                exe_name(args)
+            );
+            exit(1);
+        },
+        Some(s) => s
+    };
 
     if let Some(lib_path) = ld_config.lib_path {
         eprint!(buf, "ld_library_path: {}\n", PrintableBytes{data: lib_path});
     }
 
-    syscall::exit(0);
+    if load_elf(&mut buf, args, ld_exe).is_err() {
+        exit(1);
+    }
+
     exit(0);
 }
