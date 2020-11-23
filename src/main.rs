@@ -19,7 +19,7 @@ mod syscall;
 mod unwind_resume;
 
 use core::fmt::{self, Write};
-use core::mem::size_of;
+use core::mem::{self, size_of};
 use core::slice::from_raw_parts as mkslice;
 use core::str;
 use exit::exit;
@@ -89,10 +89,10 @@ impl<'a> fmt::Display for PrintableBytes<'a> {
     }
 }
 
-unsafe fn exe_name(args: &[*const u8]) -> PrintableBytes {
+fn exe_name(args: &[*const u8]) -> PrintableBytes {
     PrintableBytes {
         data: if args.len() > 0 {
-            slice_from_ptr(args[0])
+            unsafe { slice_from_ptr(args[0]) }
         } else {
             b""
         },
@@ -105,7 +105,7 @@ type ElfHeader = libc::Elf32_Phdr;
 #[cfg(target_pointer_width = "64")]
 type ElfHeader = libc::Elf64_Phdr;
 
-unsafe fn load_elf(buf: &mut PrintBuffer, args: &[*const u8], ld_exe: &[u8]) -> Result<(), ()> {
+fn load_elf(buf: &mut PrintBuffer, args: &[*const u8], ld_exe: &[u8]) -> Result<(), ()> {
     let fd = match fd::open(ld_exe, libc::O_RDONLY) {
         Ok(fd) => fd,
         Err(num) => {
@@ -121,16 +121,7 @@ unsafe fn load_elf(buf: &mut PrintBuffer, args: &[*const u8], ld_exe: &[u8]) -> 
         }
     };
 
-    let mut header = ElfHeader {
-        p_align: 0,
-        p_filesz: 0,
-        p_flags: 0,
-        p_memsz: 0,
-        p_offset: 0,
-        p_paddr: 0,
-        p_type: 0,
-        p_vaddr: 0,
-    };
+    let mut header = unsafe { mem::zeroed() };
     fd.read(
         (&mut header as *mut ElfHeader) as *mut c_void,
         size_of::<ElfHeader>(),
