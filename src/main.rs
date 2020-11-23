@@ -19,6 +19,8 @@ mod start;
 mod string;
 mod syscall;
 mod unwind_resume;
+mod exit;
+use exit::exit;
 use core::fmt::{self, Write};
 use core::slice::from_raw_parts as mkslice;
 
@@ -133,4 +135,5 @@ pub unsafe fn main(stack_top: *const u8) {
     }
 
     syscall::exit(0);
+    exit(0);
 }
