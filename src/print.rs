@@ -64,6 +64,7 @@ pub fn eprint(s: &[u8]) {
 #[macro_export]
 macro_rules! print {
     ($buf:expr, $fmt:expr $(, $args:expr)*) => {
+        // Should not fail because PrintBuffer does not fail
         write!($buf, $fmt, $( $args ),*).unwrap();
         print::print($buf.as_bytes());
         $buf.clear();
@@ -73,6 +74,7 @@ macro_rules! print {
 #[macro_export]
 macro_rules! eprint {
     ($buf:expr, $fmt:expr $(, $args:expr)*) => {
+        // Should not fail because PrintBuffer does not fail
         write!($buf, $fmt, $( $args ),*).unwrap();
         print::eprint($buf.as_bytes());
         $buf.clear();
