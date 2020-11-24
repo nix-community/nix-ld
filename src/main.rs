@@ -60,21 +60,19 @@ unsafe fn slice_from_ptr(ptr: *const u8) -> &'static [u8] {
     mkslice(ptr, strlen(ptr))
 }
 
-unsafe fn process_env(mut envp: *const *const u8) -> LdConfig {
+fn process_env(env: &[*const u8]) -> LdConfig {
     let mut config = LdConfig {
         exe: None,
         lib_path: None,
     };
-    while !(*envp).is_null() {
-        let var = slice_from_ptr(*envp);
+    for varp in env.iter() {
+        let var = unsafe { slice_from_ptr(*varp) };
         if var.starts_with(NIX_LD) {
             config.exe = Some(&var[NIX_LD.len()..]);
         };
         if var.starts_with(NIX_LD_LIB_PATH) {
             config.lib_path = Some(&var[NIX_LD_LIB_PATH.len()..]);
         };
-
-        envp = envp.add(1);
     }
     config
 }
@@ -129,18 +127,25 @@ fn load_elf(buf: &mut PrintBuffer, args: &[*const u8], ld_exe: &[u8]) -> Result<
     Ok(())
 }
 
-/// # Safety
-///
-/// This function performs unsafe pointer aritmethic
-#[no_mangle]
-pub unsafe fn main(stack_top: *const u8) {
+unsafe fn get_args_and_env(stack_top: *const u8) -> (&'static [*const u8], &'static [*const u8]) {
     let argc = *(stack_top as *const c_int);
     let argv = stack_top.add(size_of::<*const c_int>()) as *const *const u8;
-    let envp = argv.add(argc as usize + 1) as *const *const u8;
-
+    let env_start = argv.add(argc as usize + 1) as *const *const u8;
+    let mut envp = env_start;
+    let mut envc: usize = 0;
+    while !(*envp).is_null() {
+        envp = envp.add(1);
+        envc += 1;
+    }
     let args = mkslice(argv, argc as usize);
+    let env = mkslice(env_start, envc as usize);
+    (args, env)
+}
 
-    let ld_config = process_env(envp);
+#[no_mangle]
+pub fn main(stack_top: *const u8) {
+    let (args, env) = unsafe { get_args_and_env(stack_top) };
+    let ld_config = process_env(env);
 
     let mut buf = [0u8; 4096];
     let mut buf = PrintBuffer::new(&mut buf[..]);
