@@ -45,11 +45,12 @@ struct LdConfig {
     lib_path: Option<&'static [u8]>,
 }
 
-unsafe fn slice_from_cstr(mut s: *const u8) -> &'static [u8] {
+unsafe fn slice_from_cstr(s: *const u8) -> &'static [u8] {
     let mut count = 0;
-    while *s != b'\0' {
+    let mut sp = s;
+    while *sp != b'\0' {
         count += 1;
-        s = s.add(1);
+        sp = sp.add(1);
     }
     mkslice(s, count)
 }
