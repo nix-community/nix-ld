@@ -121,17 +121,17 @@ fn load_elf(buf: &mut PrintBuffer, args: &[*const u8], ld_exe: &[u8]) -> Result<
 }
 
 unsafe fn get_args_and_env(stack_top: *const u8) -> (&'static [*const u8], &'static [*const u8]) {
-    let argc = *(stack_top as *const c_int);
+    let argc = *(stack_top as *const c_int) as usize;
     let argv = stack_top.add(size_of::<*const c_int>()) as *const *const u8;
-    let env_start = argv.add(argc as usize + 1) as *const *const u8;
+    let env_start = argv.add(argc + 1) as *const *const u8;
     let mut envp = env_start;
     let mut envc: usize = 0;
     while !(*envp).is_null() {
         envp = envp.add(1);
         envc += 1;
     }
-    let args = mkslice(argv, argc as usize);
-    let env = mkslice(env_start, envc as usize);
+    let args = mkslice(argv, argc);
+    let env = mkslice(env_start, envc);
     (args, env)
 }
 
