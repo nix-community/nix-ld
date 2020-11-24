@@ -36,18 +36,6 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-/// # Safety
-///
-/// This function performs unsafe pointer aritmethic
-pub unsafe fn strlen(mut s: *const u8) -> usize {
-    let mut count = 0;
-    while *s != b'\0' {
-        count += 1;
-        s = s.add(1);
-    }
-    count
-}
-
 const NIX_LD: &'static [u8] = b"NIX_LD=";
 const NIX_LD_LIB_PATH: &'static [u8] = b"NIX_LD_LIBRARY_PATH=";
 
@@ -56,8 +44,13 @@ struct LdConfig {
     lib_path: Option<&'static [u8]>,
 }
 
-unsafe fn slice_from_ptr(ptr: *const u8) -> &'static [u8] {
-    mkslice(ptr, strlen(ptr))
+unsafe fn slice_from_cstr(mut s: *const u8) -> &'static [u8] {
+    let mut count = 0;
+    while *s != b'\0' {
+        count += 1;
+        s = s.add(1);
+    }
+    mkslice(s, count)
 }
 
 fn process_env(env: &[*const u8]) -> LdConfig {
@@ -66,7 +59,7 @@ fn process_env(env: &[*const u8]) -> LdConfig {
         lib_path: None,
     };
     for varp in env.iter() {
-        let var = unsafe { slice_from_ptr(*varp) };
+        let var = unsafe { slice_from_cstr(*varp) };
         if var.starts_with(NIX_LD) {
             config.exe = Some(&var[NIX_LD.len()..]);
         };
@@ -90,7 +83,7 @@ impl<'a> fmt::Display for PrintableBytes<'a> {
 fn exe_name(args: &[*const u8]) -> PrintableBytes {
     PrintableBytes {
         data: if args.len() > 0 {
-            unsafe { slice_from_ptr(args[0]) }
+            unsafe { slice_from_cstr(args[0]) }
         } else {
             b""
         },
