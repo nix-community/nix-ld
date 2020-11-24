@@ -1,93 +1,48 @@
-use core::str::lossy::Utf8Lossy;
-use crate::syscall::write;
+use crate::syscall;
 use core::fmt;
 use core::str;
-use libc::{STDERR_FILENO, STDOUT_FILENO};
+use libc::c_int;
 
-pub struct PrintableBytes<'a> {
-    pub data: &'a [u8],
+pub struct UnbufferedPrint {
+    fd: c_int,
 }
 
-impl<'a> fmt::Display for PrintableBytes<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}", Utf8Lossy::from_bytes(self.data))
-    }
-}
-
-pub struct PrintBuffer<'a> {
-    buf: &'a mut [u8],
-    cursor: usize,
-}
-
-impl<'a> PrintBuffer<'a> {
-    pub fn new(buf: &'a mut [u8]) -> Self {
-        PrintBuffer { buf, cursor: 0 }
-    }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        return self.buf;
-    }
-
-    #[inline]
-    pub fn capacity(&self) -> usize {
-        self.buf.len()
-    }
-
-    pub fn clear(&mut self) {
-        self.cursor = 0;
+impl UnbufferedPrint {
+    pub fn new(fd: c_int) -> Self {
+        UnbufferedPrint { fd }
     }
 }
 
-impl fmt::Write for PrintBuffer<'_> {
+impl fmt::Write for UnbufferedPrint {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        let cap = self.capacity();
-        for (i, &b) in self.buf[self.cursor..cap]
-            .iter_mut()
-            .zip(s.as_bytes().iter())
-        {
-            *i = b;
+        // not fast but little code and we only print on the error path anyway
+        unsafe {
+            syscall::write(self.fd, s.as_ptr() as *const libc::c_void, s.len());
         }
-        self.cursor = usize::min(cap, self.cursor + s.as_bytes().len());
         Ok(())
-    }
-}
-
-pub fn print(s: &[u8]) {
-    unsafe {
-        write(
-            STDOUT_FILENO as i32,
-            s.as_ptr() as *const libc::c_void,
-            s.len(),
-        );
-    }
-}
-
-pub fn eprint(s: &[u8]) {
-    unsafe {
-        write(
-            STDERR_FILENO as i32,
-            s.as_ptr() as *const libc::c_void,
-            s.len(),
-        );
     }
 }
 
 #[macro_export]
 macro_rules! print {
-    ($buf:expr, $fmt:expr $(, $args:expr)*) => {
-        // Should not fail because PrintBuffer does not fail
-        write!($buf, $fmt, $( $args ),*).unwrap();
-        print::print($buf.as_bytes());
-        $buf.clear();
+    ($fmt:expr $(, $args:expr)*) => {
+        {
+            use core::fmt::Write;
+            let mut buf = crate::print::UnbufferedPrint::new(::libc::STDOUT_FILENO);
+            // Should not fail because PrintBuffer does not fail
+            write!(buf, $fmt, $( $args ),*).unwrap();
+        }
     }
 }
 
 #[macro_export]
 macro_rules! eprint {
-    ($buf:expr, $fmt:expr $(, $args:expr)*) => {
-        // Should not fail because PrintBuffer does not fail
-        write!($buf, $fmt, $( $args ),*).unwrap();
-        print::eprint($buf.as_bytes());
-        $buf.clear();
+    ($fmt:expr $(, $args:expr)*) => {
+        {
+            use core::fmt::Write;
+            let mut buf = crate::print::UnbufferedPrint::new(::libc::STDERR_FILENO);
+            // Should not fail because PrintBuffer does not fail
+            write!(buf, $fmt, $( $args ),*).unwrap();
+        }
     }
 }

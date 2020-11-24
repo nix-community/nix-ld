@@ -19,24 +19,21 @@ mod string;
 mod syscall;
 mod unwind_resume;
 
-use core::fmt::Write;
 use core::mem::{self, size_of};
+use core::ptr;
 use core::slice::from_raw_parts as mkslice;
-use core::str;
 use exit::exit;
 use libc::{c_int, c_void};
 
-use crate::print::{PrintBuffer, PrintableBytes};
 pub use crate::start::_start;
+use core::str::lossy::Utf8Lossy;
 
 #[lang = "eh_personality"]
 fn eh_personality() {}
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    let mut buf = [0u8; 4096];
-    let mut buf = PrintBuffer::new(&mut buf[..]);
-    print!(buf, "panicked with {}", info);
+    print!("panicked with {}\n", info);
     exit(1);
 }
 
@@ -75,14 +72,12 @@ fn process_env(env: &[*const u8]) -> LdConfig {
     config
 }
 
-fn exe_name(args: &[*const u8]) -> PrintableBytes {
-    PrintableBytes {
-        data: if args.len() > 0 {
-            unsafe { slice_from_cstr(args[0]) }
-        } else {
-            b""
-        },
-    }
+fn exe_name(args: &[*const u8]) -> &Utf8Lossy {
+    Utf8Lossy::from_bytes(if args.len() > 0 {
+        unsafe { slice_from_cstr(args[0]) }
+    } else {
+        b""
+    })
 }
 
 #[cfg(target_pointer_width = "32")]
@@ -91,15 +86,14 @@ type ElfHeader = libc::Elf32_Phdr;
 #[cfg(target_pointer_width = "64")]
 type ElfHeader = libc::Elf64_Phdr;
 
-fn load_elf(buf: &mut PrintBuffer, args: &[*const u8], ld_exe: &[u8]) -> Result<(), ()> {
+fn load_elf(args: &[*const u8], ld_exe: &[u8]) -> Result<(), ()> {
     let fd = match fd::open(ld_exe, libc::O_RDONLY) {
         Ok(fd) => fd,
         Err(num) => {
             eprint!(
-                buf,
                 "cannot execute {}: cannot open link loader {}: {} ({})",
                 exe_name(args),
-                PrintableBytes { data: ld_exe },
+                Utf8Lossy::from_bytes(ld_exe),
                 errno::strerror(num),
                 num
             );
@@ -135,14 +129,10 @@ pub fn main(stack_top: *const u8) {
     let (args, env) = unsafe { get_args_and_env(stack_top) };
     let ld_config = process_env(env);
 
-    let mut buf = [0u8; 4096];
-    let mut buf = PrintBuffer::new(&mut buf[..]);
-
     let ld_exe = match ld_config.exe {
         None => {
             eprint!(
-                buf,
-                "Cannot execute binary {}: No NIX_LD environment variable set",
+                "Cannot execute binary {}: No NIX_LD environment variable set\n",
                 exe_name(args)
             );
             exit(1);
@@ -151,14 +141,10 @@ pub fn main(stack_top: *const u8) {
     };
 
     if let Some(lib_path) = ld_config.lib_path {
-        eprint!(
-            buf,
-            "ld_library_path: {}\n",
-            PrintableBytes { data: lib_path }
-        );
+        eprint!("ld_library_path: {}\n", Utf8Lossy::from_bytes(lib_path));
     }
 
-    if load_elf(&mut buf, args, ld_exe).is_err() {
+    if load_elf(args, ld_exe).is_err() {
         exit(1);
     }
 
