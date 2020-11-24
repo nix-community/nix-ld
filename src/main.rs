@@ -33,8 +33,11 @@ pub use crate::start::_start;
 fn eh_personality() {}
 
 #[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    loop {}
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    let mut buf = [0u8; 4096];
+    let mut buf = PrintBuffer::new(&mut buf[..]);
+    print!(buf, "panicked with {}", info);
+    exit(1);
 }
 
 const NIX_LD: &'static [u8] = b"NIX_LD=";
