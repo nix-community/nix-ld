@@ -81,10 +81,21 @@ fn exe_name(args: &[*const u8]) -> &Utf8Lossy {
 }
 
 #[cfg(target_pointer_width = "32")]
-type ElfHeader = libc::Elf32_Phdr;
+type ElfHeader = libc::Elf32_Ehdr;
+#[cfg(target_pointer_width = "32")]
+type ElfProgramHeader = libc::Elf32_Phdr;
 
 #[cfg(target_pointer_width = "64")]
-type ElfHeader = libc::Elf64_Phdr;
+type ElfHeader = libc::Elf64_Ehdr;
+#[cfg(target_pointer_width = "64")]
+type ElfProgramHeader = libc::Elf64_Phdr;
+
+const ELF_MAGIC: &'static [u8] = b"\xb1ELF";
+
+unsafe fn jmp(addr: *const u8) {
+    let fn_ptr: fn() = core::mem::transmute(addr);
+    fn_ptr();
+}
 
 fn load_elf(args: &[*const u8], ld_exe: &[u8]) -> Result<(), ()> {
     let fd = match fd::open(ld_exe, libc::O_RDONLY) {
@@ -101,11 +112,57 @@ fn load_elf(args: &[*const u8], ld_exe: &[u8]) -> Result<(), ()> {
         }
     };
 
-    let mut header = unsafe { mem::zeroed() };
+    let mut header: ElfHeader = unsafe { mem::zeroed() };
     fd.read(
         (&mut header as *mut ElfHeader) as *mut c_void,
         size_of::<ElfHeader>(),
     );
+    if header.e_ident[..ELF_MAGIC.len()] == *ELF_MAGIC {
+        eprint!(
+            "cannot execute {}: link loader has invalid elf magic\n",
+            exe_name(args)
+        );
+        return Err(());
+    }
+    // XXX check if e_machine of elf interpreter matches the one in our binary
+    // XXX binfmt_elf also check if elf is an fdpic
+
+    let ph_size = size_of::<ElfProgramHeader>() * (header.e_phnum as usize);
+    // XXX binfmt_elf also checks ELF_MIN_ALIGN here
+    if ph_size == 0 || ph_size > 65536 {
+        eprint!(
+            "cannot execute {}: link loader has program header size: {}\n",
+            exe_name(args),
+            ph_size
+        );
+        return Err(());
+    }
+    let res = fd.mmap(
+        ptr::null(),
+        size_of::<ElfHeader>() + ph_size,
+        libc::PROT_READ,
+        libc::MAP_SHARED,
+        0,
+    );
+    let program_headers = match res {
+        Err(num) => {
+            eprint!(
+                "cannot execute {}: cannot mmap link loader headers: {} ({})\n",
+                exe_name(args),
+                errno::strerror(num),
+                num
+            );
+            return Err(());
+        }
+        Ok(mapping) => {
+            let headers_start = &mapping.data[size_of::<ElfHeader>()..];
+            let (head, body, tail) = unsafe { headers_start.align_to::<ElfProgramHeader>() };
+            assert!(head.is_empty());
+            assert!(tail.is_empty());
+            body
+        }
+    };
+
     Ok(())
 }
 
