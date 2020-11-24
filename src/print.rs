@@ -1,7 +1,18 @@
+use core::str::lossy::Utf8Lossy;
 use crate::syscall::write;
 use core::fmt;
 use core::str;
 use libc::{STDERR_FILENO, STDOUT_FILENO};
+
+pub struct PrintableBytes<'a> {
+    pub data: &'a [u8],
+}
+
+impl<'a> fmt::Display for PrintableBytes<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", Utf8Lossy::from_bytes(self.data))
+    }
+}
 
 pub struct PrintBuffer<'a> {
     buf: &'a mut [u8],

@@ -4,6 +4,7 @@
 #![feature(naked_functions)]
 #![feature(lang_items)]
 #![feature(link_args)]
+#![feature(str_internals)]
 
 #[allow(unused_attributes)]
 #[link_args = "-nostartfiles -static"]
@@ -18,14 +19,14 @@ mod string;
 mod syscall;
 mod unwind_resume;
 
-use core::fmt::{self, Write};
+use core::fmt::Write;
 use core::mem::{self, size_of};
 use core::slice::from_raw_parts as mkslice;
 use core::str;
 use exit::exit;
 use libc::{c_int, c_void};
 
-use crate::print::PrintBuffer;
+use crate::print::{PrintBuffer, PrintableBytes};
 pub use crate::start::_start;
 
 #[lang = "eh_personality"]
@@ -68,16 +69,6 @@ fn process_env(env: &[*const u8]) -> LdConfig {
         };
     }
     config
-}
-
-struct PrintableBytes<'a> {
-    data: &'a [u8],
-}
-
-impl<'a> fmt::Display for PrintableBytes<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        unsafe { write!(f, "{}", str::from_utf8_unchecked(self.data)) }
-    }
 }
 
 fn exe_name(args: &[*const u8]) -> PrintableBytes {
