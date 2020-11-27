@@ -1,12 +1,19 @@
-/// # Safety
-///
-/// This function is the entrypoint into our link-loader
-#[no_mangle]
-#[naked]
-pub unsafe fn _start() {
-    #[cfg(target_arch = "x86_64")]
-    asm!("mov rdi, rsp", "call main");
+#[cfg(target_arch = "x86_64")]
+global_asm! {r#"
+.global _start
+_start:
+  mov %rdi, %rsp
+  call main
+"#}
 
-    #[cfg(target_arch = "aarch64")]
-    asm!("mov x0, sp", "bl main");
+#[cfg(target_arch = "aarch64")]
+global_asm! {r#"
+.global _start
+_start:
+  mov %x0, %sp
+  call main
+"#}
+
+extern "C" {
+    pub fn _start();
 }

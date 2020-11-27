@@ -16,8 +16,19 @@ pub struct Mmap<'a> {
     pub data: &'a [u8],
 }
 
+impl<'a> Mmap<'a> {
+    pub unsafe fn into_raw(mut self) -> *const u8 {
+        let ptr = self.data.as_ptr();
+        self.data = &[];
+        ptr
+    }
+}
+
 impl<'a> Drop for Mmap<'a> {
     fn drop(&mut self) {
+        if self.data.len() == 0 {
+            return;
+        }
         let _ =
             unsafe { syscall::munmap(self.data.as_ptr() as *const libc::c_void, self.data.len()) };
     }
@@ -27,20 +38,20 @@ impl Fd {
     pub fn read(&self, buf: *mut c_void, count: size_t) -> libc::ssize_t {
         unsafe { syscall::read(self.num, buf, count) }
     }
-    pub fn mmap(
+    pub fn mmap<'a>(
         &self,
         addr: *const c_void,
         length: size_t,
         prot: c_int,
         flags: c_int,
         offset: off_t,
-    ) -> Result<Mmap, c_int> {
+    ) -> Result<Mmap<'a>, c_int> {
         let res = unsafe { syscall::mmap(addr, length, prot, flags, self.num, offset) };
-        if (res as c_int) < 0 {
+        if (res as isize) < 0 && (res as isize) >= -256 {
             Err(-(res as c_int))
         } else {
             Ok(Mmap {
-                data: unsafe { mkslice(addr as *const u8, length) },
+                data: unsafe { mkslice(res as *const u8, length) },
             })
         }
     }

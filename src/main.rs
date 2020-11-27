@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(asm)]
-#![feature(naked_functions)]
+#![feature(global_asm)]
 #![feature(lang_items)]
 #![feature(link_args)]
 #![feature(str_internals)]
@@ -9,6 +9,10 @@
 #[allow(unused_attributes)]
 #[link_args = "-nostartfiles -static"]
 extern "C" {}
+
+const PF_X: u32 = 1 << 0;
+const PF_W: u32 = 1 << 1;
+const PF_R: u32 = 1 << 2;
 
 mod errno;
 mod exit;
@@ -22,11 +26,16 @@ mod unwind_resume;
 use core::mem::{self, size_of};
 use core::ptr;
 use core::slice::from_raw_parts as mkslice;
+use core::usize;
 use exit::exit;
-use libc::{c_int, c_void};
+use libc::{c_int, c_uint, c_void, off_t, PROT_EXEC, PROT_READ, PROT_WRITE};
 
 pub use crate::start::_start;
 use core::str::lossy::Utf8Lossy;
+
+const ET_EXEC: u16 = 2;
+const ET_DYN: u16 = 3;
+const PT_LOAD: u32 = 1;
 
 #[lang = "eh_personality"]
 fn eh_personality() {}
@@ -81,14 +90,22 @@ fn exe_name(args: &[*const u8]) -> &Utf8Lossy {
 }
 
 #[cfg(target_pointer_width = "32")]
-type ElfHeader = libc::Elf32_Ehdr;
-#[cfg(target_pointer_width = "32")]
-type ElfProgramHeader = libc::Elf32_Phdr;
+mod types {
+    pub type ElfHeader = libc::Elf32_Ehdr;
+    pub type ElfProgramHeader = libc::Elf32_Phdr;
+    pub type IntPtr = u32;
+    pub const INT_PTR_MAX: u32 = u32::MAX;
+}
 
 #[cfg(target_pointer_width = "64")]
-type ElfHeader = libc::Elf64_Ehdr;
-#[cfg(target_pointer_width = "64")]
-type ElfProgramHeader = libc::Elf64_Phdr;
+mod types {
+    pub type ElfHeader = libc::Elf64_Ehdr;
+    pub type ElfProgramHeader = libc::Elf64_Phdr;
+    pub type IntPtr = u64;
+    pub const INT_PTR_MAX: u64 = u64::MAX;
+}
+
+use crate::types::*;
 
 const ELF_MAGIC: &'static [u8] = b"\xb1ELF";
 
@@ -97,13 +114,120 @@ unsafe fn jmp(addr: *const u8) {
     fn_ptr();
 }
 
-fn load_elf(args: &[*const u8], ld_exe: &[u8]) -> Result<(), ()> {
+const PAGE_SIZE: IntPtr = 4096; // FIXME actual page size here
+
+fn prot_flags(p_flags: c_uint) -> c_int {
+    (if p_flags & PF_R != 0 { PROT_READ } else { 0 })
+        | (if p_flags & PF_W != 0 { PROT_WRITE } else { 0 })
+        | (if p_flags & PF_X != 0 { PROT_EXEC } else { 0 })
+}
+
+fn total_mapping_size(prog_headers: &[ElfProgramHeader]) -> IntPtr {
+    let mut addr_min = INT_PTR_MAX;
+    let mut addr_max = 0;
+    for ph in prog_headers {
+        if ph.p_type != PT_LOAD || ph.p_memsz == 0 {
+            continue;
+        }
+        if ph.p_vaddr < addr_min {
+            addr_min = ph.p_vaddr;
+        }
+        if ph.p_vaddr + ph.p_memsz > addr_max {
+            addr_max = ph.p_vaddr + ph.p_memsz;
+        }
+    }
+    addr_max - addr_min
+}
+
+fn elf_page_start(v: IntPtr) -> IntPtr {
+    v & !(PAGE_SIZE - 1)
+}
+
+fn elf_page_offset(v: IntPtr) -> IntPtr {
+    v & (PAGE_SIZE - 1)
+}
+
+fn elf_page_align(v: IntPtr) -> IntPtr {
+    (v + PAGE_SIZE - 1) & !(PAGE_SIZE - 1)
+}
+
+fn map_elf<'a>(
+    exe_name: &Utf8Lossy,
+    ld_exe: &Utf8Lossy,
+    fd: &fd::Fd,
+    prog_headers: &[ElfProgramHeader],
+) -> Result<fd::Mmap<'a>, ()> {
+    let mut total_size = total_mapping_size(prog_headers);
+
+    if total_size == 0 {
+        eprint!(
+            "cannot execute {}: no program headers found in {}",
+            exe_name, ld_exe
+        );
+        return Err(());
+    }
+
+    let mut load_addr: IntPtr = 0;
+    let mut total_mapping: Option<fd::Mmap> = None;
+    for ph in prog_headers {
+        // zero sized segments are valid but we won't mmap them
+        if ph.p_type != PT_LOAD || ph.p_filesz == 0 {
+            continue;
+        }
+        let prot = prot_flags(ph.p_flags);
+        load_addr = if load_addr == 0 {
+            0
+        } else {
+            elf_page_start(load_addr + ph.p_vaddr)
+        };
+        let size = if total_size == 0 {
+            ph.p_filesz - elf_page_offset(ph.p_vaddr)
+        } else {
+            // mmap the whole library range to reserver the area,
+            // later smaller parts will be mmaped over it.
+            elf_page_align(total_size)
+        };
+        let off_start = ph.p_offset - elf_page_offset(ph.p_vaddr);
+        let res = fd.mmap(
+            load_addr as *const c_void,
+            size as usize,
+            prot,
+            libc::MAP_PRIVATE,
+            off_start as off_t,
+        );
+        let mapping = match res {
+            Ok(mapping) => mapping,
+            Err(num) => {
+                eprint!(
+                    "cannot execute {}: mmap segment of {} failed: {} ({})\n",
+                    exe_name,
+                    ld_exe,
+                    errno::strerror(num),
+                    num
+                );
+                return Err(());
+            }
+        };
+        if total_size != 0 {
+            load_addr = mapping.data.as_ptr() as IntPtr;
+            total_mapping = Some(mapping);
+            total_size = 0;
+        } else {
+            // We can leak smaller allocations because total_mapping covers it
+            unsafe { mapping.into_raw() };
+        }
+    }
+
+    Ok(total_mapping.unwrap())
+}
+
+fn load_elf<'a>(exe_name: &Utf8Lossy, ld_exe: &[u8]) -> Result<fd::Mmap<'a>, ()> {
     let fd = match fd::open(ld_exe, libc::O_RDONLY) {
         Ok(fd) => fd,
         Err(num) => {
             eprint!(
                 "cannot execute {}: cannot open link loader {}: {} ({})",
-                exe_name(args),
+                exe_name,
                 Utf8Lossy::from_bytes(ld_exe),
                 errno::strerror(num),
                 num
@@ -120,10 +244,20 @@ fn load_elf(args: &[*const u8], ld_exe: &[u8]) -> Result<(), ()> {
     if header.e_ident[..ELF_MAGIC.len()] == *ELF_MAGIC {
         eprint!(
             "cannot execute {}: link loader has invalid elf magic\n",
-            exe_name(args)
+            exe_name
         );
         return Err(());
     }
+    // TODO also support dynamic excutable
+    //if header.e_type != ET_EXEC && header.e_type != ET_DYN {
+    if header.e_type != ET_DYN {
+        eprint!(
+            "cannot execute {}: link loader is not an dynamic library\n",
+            exe_name
+        );
+        return Err(());
+    }
+
     // XXX check if e_machine of elf interpreter matches the one in our binary
     // XXX binfmt_elf also check if elf is an fdpic
 
@@ -132,23 +266,23 @@ fn load_elf(args: &[*const u8], ld_exe: &[u8]) -> Result<(), ()> {
     if ph_size == 0 || ph_size > 65536 {
         eprint!(
             "cannot execute {}: link loader has program header size: {}\n",
-            exe_name(args),
-            ph_size
+            exe_name, ph_size
         );
         return Err(());
     }
+
     let res = fd.mmap(
         ptr::null(),
         size_of::<ElfHeader>() + ph_size,
         libc::PROT_READ,
-        libc::MAP_SHARED,
+        libc::MAP_PRIVATE,
         0,
     );
-    let program_headers = match res {
+    let prog_headers = match res {
         Err(num) => {
             eprint!(
                 "cannot execute {}: cannot mmap link loader headers: {} ({})\n",
-                exe_name(args),
+                exe_name,
                 errno::strerror(num),
                 num
             );
@@ -163,7 +297,7 @@ fn load_elf(args: &[*const u8], ld_exe: &[u8]) -> Result<(), ()> {
         }
     };
 
-    Ok(())
+    return map_elf(exe_name, Utf8Lossy::from_bytes(ld_exe), &fd, prog_headers);
 }
 
 unsafe fn get_args_and_env(stack_top: *const u8) -> (&'static [*const u8], &'static [*const u8]) {
@@ -201,7 +335,7 @@ pub fn main(stack_top: *const u8) {
         eprint!("ld_library_path: {}\n", Utf8Lossy::from_bytes(lib_path));
     }
 
-    if load_elf(args, ld_exe).is_err() {
+    if load_elf(exe_name(args), ld_exe).is_err() {
         exit(1);
     }
 
