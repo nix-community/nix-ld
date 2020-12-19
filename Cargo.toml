@@ -13,3 +13,10 @@ libc = { git = "https://github.com/Mic92/libc", branch = "no-libc" }
 
 [build-dependencies]
 cc = "*"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+lto = true

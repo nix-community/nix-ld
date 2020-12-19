@@ -1,5 +1,4 @@
 #![no_std]
-#![feature(lang_items)]
 
 const PF_X: u32 = 1 << 0;
 const PF_W: u32 = 1 << 1;
@@ -27,8 +26,6 @@ const ET_EXEC: u16 = 2;
 const ET_DYN: u16 = 3;
 const PT_LOAD: u32 = 1;
 
-#[lang = "eh_personality"]
-fn eh_personality() {}
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
