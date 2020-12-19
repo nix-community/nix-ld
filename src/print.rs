@@ -1,4 +1,4 @@
-use crate::syscall;
+use crate::syscalls;
 use core::fmt;
 use core::str;
 use libc::c_int;
@@ -17,7 +17,7 @@ impl fmt::Write for UnbufferedPrint {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         // not fast but little code and we only print on the error path anyway
         unsafe {
-            syscall::write(self.fd, s.as_ptr() as *const libc::c_void, s.len());
+            syscalls::write(self.fd, s.as_ptr() as *const libc::c_void, s.len());
         }
         Ok(())
     }

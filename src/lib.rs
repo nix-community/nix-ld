@@ -1,14 +1,5 @@
 #![no_std]
-#![no_main]
-#![feature(asm)]
-#![feature(global_asm)]
 #![feature(lang_items)]
-#![feature(link_args)]
-#![feature(str_internals)]
-
-#[allow(unused_attributes)]
-#[link_args = "-nostartfiles -static"]
-extern "C" {}
 
 const PF_X: u32 = 1 << 0;
 const PF_W: u32 = 1 << 1;
@@ -18,10 +9,10 @@ mod errno;
 mod exit;
 mod fd;
 mod print;
-mod start;
 mod string;
-mod syscall;
+mod syscalls;
 mod unwind_resume;
+mod lossy;
 
 use core::mem::{self, size_of};
 use core::ptr;
@@ -30,8 +21,7 @@ use core::usize;
 use exit::exit;
 use libc::{c_int, c_uint, c_void, off_t, PROT_EXEC, PROT_READ, PROT_WRITE};
 
-pub use crate::start::_start;
-use core::str::lossy::Utf8Lossy;
+use lossy::Utf8Lossy;
 
 const ET_EXEC: u16 = 2;
 const ET_DYN: u16 = 3;
@@ -126,6 +116,7 @@ fn total_mapping_size(prog_headers: &[ElfProgramHeader]) -> IntPtr {
     let mut addr_min = INT_PTR_MAX;
     let mut addr_max = 0;
     for ph in prog_headers {
+        eprint!("ph: {:x}\n", ph as *const ElfProgramHeader as usize);
         if ph.p_type != PT_LOAD || ph.p_memsz == 0 {
             continue;
         }
@@ -209,7 +200,7 @@ fn map_elf<'a>(
             }
         };
         if total_size != 0 {
-            load_addr = mapping.data.as_ptr() as IntPtr;
+            load_addr = mapping.data.as_ptr() as IntPtr - ph.p_vaddr;
             total_mapping = Some(mapping);
             total_size = 0;
         } else {

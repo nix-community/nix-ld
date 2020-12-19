@@ -4,5 +4,12 @@ version = "0.1.0"
 authors = ["Jörg Thalheim <joerg@thalheim.io>"]
 edition = "2018"
 
+[lib]
+crate-type = ["staticlib"]
+
 [dependencies]
 libc = { git = "https://github.com/Mic92/libc", branch = "no-libc" }
+
+
+[build-dependencies]
+cc = "*"

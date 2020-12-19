@@ -1,34 +1,34 @@
 use libc::{c_char, c_int, c_long, c_void, off_t, size_t, ssize_t};
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-#[path = "platform/linux-x86_64/mod.rs"]
-mod platform;
-
-#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-#[path = "platform/linux-aarch64/mod.rs"]
-mod platform;
-
-use platform::*;
+extern "C" {
+    fn __syscall0(n: c_long) -> c_long;
+    fn __syscall1(n: c_long, a1: c_long) -> c_long;
+    fn __syscall2(n: c_long, a1: c_long, a2: c_long) -> c_long;
+    fn __syscall3(n: c_long, a1: c_long, a2: c_long, a3: c_long) -> c_long;
+    fn __syscall4(n: c_long, a1: c_long, a2: c_long, a3: c_long, a4: c_long) -> c_long;
+    fn __syscall5(n: c_long, a1: c_long, a2: c_long, a3: c_long, a4: c_long, a5: c_long) -> c_long;
+    fn __syscall6(n: c_long, a1: c_long, a2: c_long, a3: c_long, a4: c_long, a5: c_long, a6: c_long) -> c_long;
+}
 
 macro_rules! syscall {
     ($nr:expr) => {
-        syscall0($nr)
+        __syscall0($nr)
     };
 
     ($nr:expr, $a1:expr) => {
-        syscall1($nr, $a1 as c_long)
+        __syscall1($nr, $a1 as c_long)
     };
 
     ($nr:expr, $a1:expr, $a2:expr) => {
-        syscall2($nr, $a1 as c_long, $a2 as c_long)
+        __syscall2($nr, $a1 as c_long, $a2 as c_long)
     };
 
     ($nr:expr, $a1:expr, $a2:expr, $a3:expr) => {
-        syscall3($nr, $a1 as c_long, $a2 as c_long, $a3 as c_long)
+        __syscall3($nr, $a1 as c_long, $a2 as c_long, $a3 as c_long)
     };
 
     ($nr:expr, $a1:expr, $a2:expr, $a3:expr, $a4:expr) => {
-        syscall4(
+        __syscall4(
             $nr,
             $a1 as c_long,
             $a2 as c_long,
@@ -38,7 +38,7 @@ macro_rules! syscall {
     };
 
     ($nr:expr, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr) => {
-        syscall5(
+        __syscall5(
             $nr,
             $a1 as c_long,
             $a2 as c_long,
@@ -49,7 +49,7 @@ macro_rules! syscall {
     };
 
     ($nr:expr, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr, $a6:expr) => {
-        syscall6(
+        __syscall6(
             $nr,
             $a1 as c_long,
             $a2 as c_long,
@@ -61,7 +61,7 @@ macro_rules! syscall {
     };
 
     ($nr:expr, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr, $a6:expr, $a7:expr) => {
-        syscall7(
+        __syscall7(
             $nr,
             $a1 as c_long,
             $a2 as c_long,
