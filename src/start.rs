@@ -1,16 +1,18 @@
 #[cfg(target_arch = "x86_64")]
 global_asm! {r#"
+.intel_syntax noprefix
 .global _start
 _start:
-  mov %rdi, %rsp
+  mov rdi, rsp
   call main
 "#}
 
 #[cfg(target_arch = "aarch64")]
 global_asm! {r#"
+.intel_syntax noprefix
 .global _start
 _start:
-  mov %x0, %sp
+  mov x0, sp
   call main
 "#}
 
