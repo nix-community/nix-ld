@@ -114,7 +114,6 @@ fn total_mapping_size(prog_headers: &[ElfProgramHeader]) -> IntPtr {
     let mut addr_min = INT_PTR_MAX;
     let mut addr_max = 0;
     for ph in prog_headers {
-        eprint!("ph: {:x}\n", ph as *const ElfProgramHeader as usize);
         if ph.p_type != PT_LOAD || ph.p_memsz == 0 {
             continue;
         }
@@ -164,21 +163,21 @@ fn map_elf<'a>(
             continue;
         }
         let prot = prot_flags(ph.p_flags);
-        load_addr = if load_addr == 0 {
+        let addr = if load_addr == 0 {
             0
         } else {
             elf_page_start(load_addr + ph.p_vaddr)
         };
-        let size = if total_size == 0 {
-            ph.p_filesz - elf_page_offset(ph.p_vaddr)
-        } else {
-            // mmap the whole library range to reserver the area,
+        let size = if load_addr == 0 {
+            // mmap the whole library range to reserve the area,
             // later smaller parts will be mmaped over it.
             elf_page_align(total_size)
+        } else {
+            elf_page_align(ph.p_filesz - elf_page_offset(ph.p_vaddr))
         };
         let off_start = ph.p_offset - elf_page_offset(ph.p_vaddr);
         let res = fd.mmap(
-            load_addr as *const c_void,
+            addr as *const c_void,
             size as usize,
             prot,
             libc::MAP_PRIVATE,
@@ -197,10 +196,16 @@ fn map_elf<'a>(
                 return Err(());
             }
         };
-        if total_size != 0 {
+        //eprint!("mmap {:x} ({:x}) at {:x} (vaddr: {:x}, load_addr: {:x}, prot: ", size, ph.p_filesz, mapping.data.as_ptr() as usize, ph.p_vaddr, load_addr);
+        //eprint!("{}{}{}",
+        //        (if ph.p_flags & PF_R != 0 { "r" } else { "-" }),
+        //        (if ph.p_flags & PF_W != 0 { "w" } else { "-" }),
+        //        (if ph.p_flags & PF_X != 0 { "x" } else { "-" }));
+        //eprint!(")\n");
+
+        if load_addr == 0 {
             load_addr = mapping.data.as_ptr() as IntPtr - ph.p_vaddr;
             total_mapping = Some(mapping);
-            total_size = 0;
         } else {
             // We can leak smaller allocations because total_mapping covers it
             unsafe { mapping.into_raw() };
@@ -267,7 +272,7 @@ fn load_elf<'a>(exe_name: &Utf8Lossy, ld_exe: &[u8]) -> Result<fd::Mmap<'a>, ()>
         libc::MAP_PRIVATE,
         0,
     );
-    let prog_headers = match res {
+    let headers_mapping = match res {
         Err(num) => {
             eprint!(
                 "cannot execute {}: cannot mmap link loader headers: {} ({})\n",
@@ -277,14 +282,13 @@ fn load_elf<'a>(exe_name: &Utf8Lossy, ld_exe: &[u8]) -> Result<fd::Mmap<'a>, ()>
             );
             return Err(());
         }
-        Ok(mapping) => {
-            let headers_start = &mapping.data[size_of::<ElfHeader>()..];
-            let (head, body, tail) = unsafe { headers_start.align_to::<ElfProgramHeader>() };
-            assert!(head.is_empty());
-            assert!(tail.is_empty());
-            body
-        }
+        Ok(mapping) => mapping
     };
+    // FIXME careful! prog_headers does borrow ownership from headers_start
+    // meaning that if headers_start goes out of scope than memory is unmmaped
+    let headers_start = &headers_mapping.data[size_of::<ElfHeader>()..];
+    let headers_p = headers_start.as_ptr() as *const ElfProgramHeader;
+    let prog_headers = unsafe { mkslice(headers_p, header.e_phnum as usize) };
 
     return map_elf(exe_name, Utf8Lossy::from_bytes(ld_exe), &fd, prog_headers);
 }
