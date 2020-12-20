@@ -8,5 +8,6 @@ fn main() {
     cc::Build::new()
         .file(arch_dir.join("start.s"))
         .file(arch_dir.join("syscalls.c"))
+        .file(arch_dir.join("breakpoint.s"))
         .compile("platform-code");
 }

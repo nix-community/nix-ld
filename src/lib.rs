@@ -12,6 +12,7 @@ mod string;
 mod syscalls;
 mod unwind_resume;
 mod lossy;
+mod breakpoint;
 
 use core::mem::{self, size_of};
 use core::ptr;
