@@ -16,11 +16,6 @@ pub unsafe extern "C" fn memcpy(s1: *mut c_void, s2: *const c_void, n: size_t) -
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn bcmp(s1: *mut c_void, s2: *const c_void, n: size_t) -> *mut c_void {
-    return memcpy(s1, s2, n);
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn memset(s: *mut c_void, c: c_int, n: size_t) -> *mut c_void {
     for i in 0..n {
         *(s as *mut u8).add(i) = c as u8;
@@ -58,4 +53,9 @@ pub unsafe extern "C" fn memcmp(s1: *const c_void, s2: *const c_void, n: size_t)
         b = b.offset(1);
     }
     0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn bcmp(first: *const c_void, second: *const c_void, n: size_t) -> c_int {
+    memcmp(first, second, n)
 }
