@@ -19,7 +19,7 @@ $(BUILDDIR)/$(TARGET)/libnix_ld.a: $(BUILDDIR)
 	$(CARGO) build --target-dir $(BUILDDIR) $(CARGO_FLAGS)
 
 $(BUILDDIR)/nix-ld: $(BUILDDIR)/$(TARGET)/libnix_ld.a $(BUILDDIR)
-	$(LD) -o $@ $<
+	$(LD) -pie -o $@ $<
 
 install:
 	$(INSTALL) -D -m755 $(BUILDDIR)/nix-ld $(LIBEXECDIR)/nix-ld
