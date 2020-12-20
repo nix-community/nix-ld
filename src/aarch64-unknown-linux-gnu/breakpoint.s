@@ -2,3 +2,4 @@
 .global _breakpoint
 _breakpoint:
     brk 0
+    ret
