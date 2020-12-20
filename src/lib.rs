@@ -97,9 +97,9 @@ use crate::types::*;
 
 const ELF_MAGIC: &'static [u8] = b"\xb1ELF";
 
-unsafe fn jmp(addr: *const u8) {
-    let fn_ptr: fn() = core::mem::transmute(addr);
-    fn_ptr();
+
+extern "C" {
+    fn jmp_ld(stack_top: IntPtr, addr: IntPtr) -> !;
 }
 
 const PAGE_SIZE: IntPtr = 4096; // FIXME actual page size here
@@ -144,8 +144,8 @@ fn map_elf<'a>(
     ld_exe: &Utf8Lossy,
     fd: &fd::Fd,
     prog_headers: &[ElfProgramHeader],
-) -> Result<fd::Mmap<'a>, ()> {
-    let mut total_size = total_mapping_size(prog_headers);
+) -> Result<(IntPtr, fd::Mmap<'a>), ()> {
+    let total_size = total_mapping_size(prog_headers);
 
     if total_size == 0 {
         eprint!(
@@ -176,11 +176,16 @@ fn map_elf<'a>(
             elf_page_align(ph.p_filesz - elf_page_offset(ph.p_vaddr))
         };
         let off_start = ph.p_offset - elf_page_offset(ph.p_vaddr);
+        let flags = if load_addr == 0 {
+            libc::MAP_PRIVATE
+        } else {
+            libc::MAP_PRIVATE | libc::MAP_FIXED
+        };
         let res = fd.mmap(
             addr as *const c_void,
             size as usize,
             prot,
-            libc::MAP_PRIVATE,
+            flags,
             off_start as off_t,
         );
         let mapping = match res {
@@ -196,7 +201,13 @@ fn map_elf<'a>(
                 return Err(());
             }
         };
-        //eprint!("mmap {:x} ({:x}) at {:x} (vaddr: {:x}, load_addr: {:x}, prot: ", size, ph.p_filesz, mapping.data.as_ptr() as usize, ph.p_vaddr, load_addr);
+        //eprint!("mmap {:x} ({:x}) at {:x} ({:x}) (vaddr: {:x}, load_addr: {:x}, prot: ",
+        //        size,
+        //        ph.p_filesz,
+        //        mapping.data.as_ptr() as usize,
+        //        addr,
+        //        ph.p_vaddr,
+        //        load_addr);
         //eprint!("{}{}{}",
         //        (if ph.p_flags & PF_R != 0 { "r" } else { "-" }),
         //        (if ph.p_flags & PF_W != 0 { "w" } else { "-" }),
@@ -212,10 +223,10 @@ fn map_elf<'a>(
         }
     }
 
-    Ok(total_mapping.unwrap())
+    Ok((load_addr, total_mapping.unwrap()))
 }
 
-fn load_elf<'a>(exe_name: &Utf8Lossy, ld_exe: &[u8]) -> Result<fd::Mmap<'a>, ()> {
+fn load_elf<'a>(exe_name: &Utf8Lossy, ld_exe: &[u8]) -> Result<(IntPtr, fd::Mmap<'a>), ()> {
     let fd = match fd::open(ld_exe, libc::O_RDONLY) {
         Ok(fd) => fd,
         Err(num) => {
@@ -290,7 +301,11 @@ fn load_elf<'a>(exe_name: &Utf8Lossy, ld_exe: &[u8]) -> Result<fd::Mmap<'a>, ()>
     let headers_p = headers_start.as_ptr() as *const ElfProgramHeader;
     let prog_headers = unsafe { mkslice(headers_p, header.e_phnum as usize) };
 
-    return map_elf(exe_name, Utf8Lossy::from_bytes(ld_exe), &fd, prog_headers);
+    let elf = map_elf(exe_name, Utf8Lossy::from_bytes(ld_exe), &fd, prog_headers);
+    elf.map(|(load_addr, mapping)| {
+        let entry = load_addr + header.e_entry as IntPtr;
+        (entry, mapping)
+    })
 }
 
 unsafe fn get_args_and_env(stack_top: *const u8) -> (&'static [*const u8], &'static [*const u8]) {
@@ -327,10 +342,10 @@ pub fn main(stack_top: *const u8) {
     if let Some(lib_path) = ld_config.lib_path {
         eprint!("ld_library_path: {}\n", Utf8Lossy::from_bytes(lib_path));
     }
-
-    if load_elf(exe_name(args), ld_exe).is_err() {
-        exit(1);
-    }
-
-    exit(0);
+    match load_elf(exe_name(args), ld_exe) {
+        Err(()) => { exit(1); }
+        Ok((entry_point, _mapping)) => {
+            unsafe { jmp_ld(stack_top as IntPtr, entry_point) };
+        }
+    };
 }
