@@ -1,13 +1,20 @@
 { pkgs ? import <nixpkgs> {} }:
 let
-  inherit (pkgs) lib stdenv rustup;
+  inherit (pkgs)
+    lib stdenv stdenvNoCC meson ninja rustc rustup musl gcc runCommand
+    binutils;
   self = stdenv.mkDerivation rec {
     name = "nix-ld";
     src = ./.;
 
     doCheck = true;
 
-    nativeBuildInputs = [ rustup ];
+    #nativeBuildInputs = [ meson ninja rustc ];
+    nativeBuildInputs = [
+      rustup
+      gcc
+      binutils
+    ];
 
     passthru.tests = import ./nixos-test.nix {
       makeTest = import (pkgs.path + "/nixos/tests/make-test-python.nix");
@@ -25,6 +32,8 @@ let
     in "${libDir}/${ldName}";
 
     dontStrip = true;
+
+    hardeningDisable = [ "all" ];
 
     installFlags = [ "PREFIX=$(out)" ];
   };

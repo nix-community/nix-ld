@@ -1,4 +1,4 @@
-use libc::c_void;
+use core::ffi::c_void;
 
 extern "C" {
     pub fn _breakpoint() -> c_void;

@@ -1,13 +1,21 @@
-use libc::{c_char, c_int, c_long, c_void, off_t, size_t, ssize_t};
+use core::ffi::c_void;
+
+const SYS_open: isize = 2;
+const SYS_close: isize = 3;
+const SYS_exit:  isize = 60;
+const SYS_mmap:  isize = 9;
+const SYS_munmap: isize = 11;
+const SYS_read:  isize = 0;
+const SYS_write: isize = 1;
 
 extern "C" {
-    fn __syscall0(n: c_long) -> c_long;
-    fn __syscall1(n: c_long, a1: c_long) -> c_long;
-    fn __syscall2(n: c_long, a1: c_long, a2: c_long) -> c_long;
-    fn __syscall3(n: c_long, a1: c_long, a2: c_long, a3: c_long) -> c_long;
-    fn __syscall4(n: c_long, a1: c_long, a2: c_long, a3: c_long, a4: c_long) -> c_long;
-    fn __syscall5(n: c_long, a1: c_long, a2: c_long, a3: c_long, a4: c_long, a5: c_long) -> c_long;
-    fn __syscall6(n: c_long, a1: c_long, a2: c_long, a3: c_long, a4: c_long, a5: c_long, a6: c_long) -> c_long;
+    fn __syscall0(n: isize) -> isize;
+    fn __syscall1(n: isize, a1: isize) -> isize;
+    fn __syscall2(n: isize, a1: isize, a2: isize) -> isize;
+    fn __syscall3(n: isize, a1: isize, a2: isize, a3: isize) -> isize;
+    fn __syscall4(n: isize, a1: isize, a2: isize, a3: isize, a4: isize) -> isize;
+    fn __syscall5(n: isize, a1: isize, a2: isize, a3: isize, a4: isize, a5: isize) -> isize;
+    fn __syscall6(n: isize, a1: isize, a2: isize, a3: isize, a4: isize, a5: isize, a6: isize) -> isize;
 }
 
 macro_rules! syscall {
@@ -16,95 +24,95 @@ macro_rules! syscall {
     };
 
     ($nr:expr, $a1:expr) => {
-        __syscall1($nr, $a1 as c_long)
+        __syscall1($nr, $a1 as isize)
     };
 
     ($nr:expr, $a1:expr, $a2:expr) => {
-        __syscall2($nr, $a1 as c_long, $a2 as c_long)
+        __syscall2($nr, $a1 as isize, $a2 as isize)
     };
 
     ($nr:expr, $a1:expr, $a2:expr, $a3:expr) => {
-        __syscall3($nr, $a1 as c_long, $a2 as c_long, $a3 as c_long)
+        __syscall3($nr, $a1 as isize, $a2 as isize, $a3 as isize)
     };
 
     ($nr:expr, $a1:expr, $a2:expr, $a3:expr, $a4:expr) => {
         __syscall4(
             $nr,
-            $a1 as c_long,
-            $a2 as c_long,
-            $a3 as c_long,
-            $a4 as c_long,
+            $a1 as isize,
+            $a2 as isize,
+            $a3 as isize,
+            $a4 as isize,
         )
     };
 
     ($nr:expr, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr) => {
         __syscall5(
             $nr,
-            $a1 as c_long,
-            $a2 as c_long,
-            $a3 as c_long,
-            $a4 as c_long,
-            $a5 as c_long,
+            $a1 as isize,
+            $a2 as isize,
+            $a3 as isize,
+            $a4 as isize,
+            $a5 as isize,
         )
     };
 
     ($nr:expr, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr, $a6:expr) => {
         __syscall6(
             $nr,
-            $a1 as c_long,
-            $a2 as c_long,
-            $a3 as c_long,
-            $a4 as c_long,
-            $a5 as c_long,
-            $a6 as c_long,
+            $a1 as isize,
+            $a2 as isize,
+            $a3 as isize,
+            $a4 as isize,
+            $a5 as isize,
+            $a6 as isize,
         )
     };
 
     ($nr:expr, $a1:expr, $a2:expr, $a3:expr, $a4:expr, $a5:expr, $a6:expr, $a7:expr) => {
         __syscall7(
             $nr,
-            $a1 as c_long,
-            $a2 as c_long,
-            $a3 as c_long,
-            $a4 as c_long,
-            $a5 as c_long,
-            $a6 as c_long,
-            $a7 as c_long,
+            $a1 as isize,
+            $a2 as isize,
+            $a3 as isize,
+            $a4 as isize,
+            $a5 as isize,
+            $a6 as isize,
+            $a7 as isize,
         )
     };
 }
 
 pub unsafe fn mmap(
     addr: *const c_void,
-    length: size_t,
-    prot: c_int,
-    flags: c_int,
-    fd: c_int,
-    offset: off_t,
+    length: usize,
+    prot: i32,
+    flags: i32,
+    fd: i32,
+    offset: i64,
 ) -> *mut c_void {
-    syscall!(libc::SYS_mmap, addr, length, prot, flags, fd, offset) as *mut c_void
+    syscall!(SYS_mmap, addr, length, prot, flags, fd) as *mut c_void
 }
 
-pub unsafe fn munmap(addr: *const c_void, length: size_t) -> *mut c_void {
-    syscall!(libc::SYS_munmap, addr, length) as *mut c_void
+pub unsafe fn munmap(addr: *const c_void, length: usize) -> *mut c_void {
+    syscall!(SYS_munmap, addr, length) as *mut c_void
 }
 
-pub unsafe fn open(pathname: *const c_char, flags: c_int) -> c_int {
-    syscall!(libc::SYS_open, pathname, flags) as c_int
+pub unsafe fn open(pathname: *const u8, flags: i32) -> i32 {
+    syscall!(SYS_open, pathname, flags) as i32
 }
 
-pub unsafe fn read(fd: c_int, buf: *mut c_void, count: size_t) -> ssize_t {
-    syscall!(libc::SYS_read, fd, buf, count) as ssize_t
+pub unsafe fn read(fd: i32, buf: *mut c_void, count: usize) -> isize {
+    syscall!(SYS_read, fd, buf, count) as isize
 }
 
-pub unsafe fn close(fd: c_int) -> c_int {
-    syscall!(libc::SYS_close, fd) as c_int
+pub unsafe fn close(fd: i32) -> i32 {
+    syscall!(SYS_close, fd) as i32
 }
 
-pub unsafe fn write(fd: c_int, buf: *const c_void, count: size_t) -> ssize_t {
-    syscall!(libc::SYS_write, fd, buf, count) as ssize_t
+pub unsafe fn write(fd: i32, buf: *const c_void, count: usize) -> isize {
+    syscall!(SYS_write, fd, buf, count) as isize
 }
 
-pub unsafe fn exit(code: c_int) {
-    syscall!(libc::SYS_exit, code);
+pub unsafe fn exit(code: i32) {
+    syscall!(SYS_exit, code);
 }

@@ -1,0 +1,73 @@
+{
+  "arch": "x86_64",
+  "cpu": "x86-64",
+  "crt-objects-fallback": "musl",
+  "crt-static-default": true,
+  "crt-static-respected": true,
+  "data-layout": "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128",
+  "dynamic-linking": false,
+  "env": "musl",
+  "executables": true,
+  "has-elf-tls": true,
+  "has-rpath": false,
+  "is-builtin": true,
+  "linker-is-gnu": true,
+  "llvm-target": "x86_64-unknown-linux-gnu",
+  "max-atomic-width": 64,
+  "os": "linux",
+  "position-independent-executables": true,
+  "post-link-objects-fallback": {
+    "dynamic-dylib": [
+      "crtn.o"
+    ],
+    "dynamic-nopic-exe": [
+      "crtn.o"
+    ],
+    "dynamic-pic-exe": [
+      "crtn.o"
+    ],
+    "static-dylib": [
+      "crtn.o"
+    ],
+    "static-nopic-exe": [
+      "crtn.o"
+    ],
+    "static-pic-exe": [
+      "crtn.o"
+    ]
+  },
+  "pre-link-args": {
+    "gcc": [
+      "-Wl,--as-needed",
+      "-Wl,-z,noexecstack",
+      "-m64"
+    ]
+  },
+  "pre-link-objects-fallback": {
+    "dynamic-dylib": [
+      "crti.o"
+    ],
+    "dynamic-nopic-exe": [
+      "crt1.o",
+      "crti.o"
+    ],
+    "dynamic-pic-exe": [
+      "Scrt1.o",
+      "crti.o"
+    ],
+    "static-dylib": [
+      "crti.o"
+    ],
+    "static-nopic-exe": [
+      "crt1.o",
+      "crti.o"
+    ],
+    "static-pic-exe": [
+    ]
+  },
+  "relro-level": "full",
+  "stack-probes": true,
+  "static-position-independent-executables": true,
+  "target-family": "unix",
+  "target-pointer-width": "64"
+}

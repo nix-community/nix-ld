@@ -1,9 +1,9 @@
 use crate::syscalls;
 use core::slice::from_raw_parts as mkslice;
-use libc::{c_int, c_void, off_t, size_t};
+use core::ffi::c_void;
 
 pub struct Fd {
-    num: c_int,
+    num: i32,
 }
 
 impl Drop for Fd {
@@ -30,25 +30,25 @@ impl<'a> Drop for Mmap<'a> {
             return;
         }
         let _ =
-            unsafe { syscalls::munmap(self.data.as_ptr() as *const libc::c_void, self.data.len()) };
+            unsafe { syscalls::munmap(self.data.as_ptr() as *const c_void, self.data.len()) };
     }
 }
 
 impl Fd {
-    pub fn read(&self, buf: *mut c_void, count: size_t) -> libc::ssize_t {
+    pub fn read(&self, buf: *mut c_void, count: usize) -> isize {
         unsafe { syscalls::read(self.num, buf, count) }
     }
     pub fn mmap<'a>(
         &self,
         addr: *const c_void,
-        length: size_t,
-        prot: c_int,
-        flags: c_int,
-        offset: off_t,
-    ) -> Result<Mmap<'a>, c_int> {
+        length: usize,
+        prot: i32,
+        flags: i32,
+        offset: i64,
+    ) -> Result<Mmap<'a>, i32> {
         let res = unsafe { syscalls::mmap(addr, length, prot, flags, self.num, offset) };
         if (res as isize) < 0 && (res as isize) >= -256 {
-            Err(-(res as c_int))
+            Err(-(res as i32))
         } else {
             Ok(Mmap {
                 data: unsafe { mkslice(res as *const u8, length) },
@@ -57,8 +57,8 @@ impl Fd {
     }
 }
 
-pub fn open(pathname: &[u8], flags: c_int) -> Result<Fd, c_int> {
-    let res = unsafe { syscalls::open(pathname.as_ptr() as *const i8, flags) };
+pub fn open(pathname: &[u8], flags: i32) -> Result<Fd, i32> {
+    let res = unsafe { syscalls::open(pathname.as_ptr(), flags) };
     if res == -1 {
         Err(res)
     } else {

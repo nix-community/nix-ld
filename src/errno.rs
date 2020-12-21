@@ -1,7 +1,5 @@
-use libc::c_int;
-
-pub fn strerror(errnum: c_int) -> &'static str {
-    if errnum >= 0 && errnum < STR_ERROR.len() as c_int {
+pub fn strerror(errnum: i32) -> &'static str {
+    if errnum >= 0 && errnum < STR_ERROR.len() as i32 {
         STR_ERROR[errnum as usize]
     } else {
         "Unknown errno"

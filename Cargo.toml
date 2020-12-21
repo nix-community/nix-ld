@@ -7,15 +7,11 @@ edition = "2018"
 [lib]
 crate-type = ["staticlib"]
 
-[dependencies]
-libc = { git = "https://github.com/Mic92/libc", branch = "no-libc" }
-
+[profile.dev]
+panic = "abort"
 
 [build-dependencies]
 cc = "*"
-
-[profile.dev]
-panic = "abort"
 
 [profile.release]
 panic = "abort"
