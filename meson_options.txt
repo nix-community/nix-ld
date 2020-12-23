@@ -1,0 +1,4 @@
+option('musl-lib', type : 'string',
+       description : '''Path to musl library directory''')
+option('musl-includes', type : 'string',
+       description : '''Path to musl header files''')
