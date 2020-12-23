@@ -9,6 +9,7 @@
 #include <sys/auxv.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <limits.h>
 
 static inline void closep(int *fd) { close(*fd); }
 static inline void freep(void *p) { free(*(void **)p); }
@@ -64,20 +65,17 @@ static size_t total_mapping_size(Phdr *phdrs, size_t phdr_num) {
   }
   return addr_max - addr_min;
 }
-#define ELF_PAGESTART(_v) ((_v) & ~(unsigned long)(ELF_MIN_ALIGN - 1))
-#define ELF_PAGEOFFSET(_v) ((_v) & (ELF_MIN_ALIGN - 1))
-#define ELF_PAGEALIGN(_v) (((_v) + ELF_MIN_ALIGN - 1) & ~(ELF_MIN_ALIGN - 1))
 
-static inline unsigned long elf_page_start(unsigned long v) {
-  return v & ~(getpagesize() - 1);
+static inline unsigned long page_start(unsigned long v) {
+  return v & ~(PAGE_SIZE - 1);
 }
 
-static inline unsigned long elf_page_offset(unsigned long v) {
-  return v & (getpagesize() - 1);
+static inline unsigned long page_offset(unsigned long v) {
+  return v & (PAGE_SIZE - 1);
 }
 
-static inline unsigned long elf_page_align(unsigned long v) {
-  return (v + getpagesize() - 1) & ~(getpagesize() - 1);
+static inline unsigned long page_align(unsigned long v) {
+  return (v + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 }
 
 static inline int32_t prot_flags(uint32_t p_flags) {
@@ -103,42 +101,59 @@ static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
   for (size_t i = 0; i < headers_num; i++) {
     Phdr *ph = &prog_headers[i];
     // zero sized segments are valid but we won't mmap them
-    if (ph->p_type != PT_LOAD || !ph->p_filesz) {
+    if (ph->p_type != PT_LOAD || !ph->p_memsz) {
       continue;
     }
     const int32_t prot = prot_flags(ph->p_flags);
-    unsigned long addr = elf_page_start(ctx->load_addr + ph->p_vaddr);
-    size_t size = elf_page_align(ph->p_filesz - elf_page_offset(ph->p_vaddr));
+
+    unsigned long addr = ctx->load_addr + page_start(ph->p_vaddr);
+    size_t size = page_align(ph->p_vaddr + ph->p_memsz) - page_start(ph->p_vaddr);
     if (!ctx->load_addr) {
       // mmap the whole library range to reserve the area,
       // later smaller parts will be mmaped over it.
-      size = elf_page_align(total_size);
+      size = page_align(total_size);
     };
-    off_t off_start = ph->p_offset - (off_t)elf_page_offset(ph->p_vaddr);
+    off_t off_start = page_start(ph->p_offset);
     int flags = MAP_PRIVATE | MAP_FIXED;
     if (!ctx->load_addr) {
       flags = MAP_PRIVATE;
     };
+
     void *mapping = mmap((void *)addr, size, prot, flags, fd, off_start);
     if (mapping == MAP_FAILED) {
       fprintf(stderr, "cannot execute %s: mmap segment of %s failed: %s\n",
               ctx->prog_name, ctx->interp_path, strerror(errno));
       return -1;
     }
-    // eprint!("mmap {:x} ({:x}) at {:x} ({:x}) (vaddr: {:x}, load_addr: {:x},
-    // prot: ",
-    //        size,
-    //        ph.p_filesz,
-    //        mapping.data.as_ptr() as usize,
-    //        addr,
-    //        ph.p_vaddr,
-    //        load_addr);
-    // eprint!("{}{}{}",
-    //        (if ph.p_flags & PF_R != 0 { "r" } else { "-" }),
-    //        (if ph.p_flags & PF_W != 0 { "w" } else { "-" }),
-    //        (if ph.p_flags & PF_X != 0 { "x" } else { "-" }));
-    // eprint!(")\n");
 
+    if (ph->p_memsz > ph->p_filesz && (ph->p_flags & PF_W)) {
+      size_t brk = ctx->load_addr + ph->p_vaddr + ph->p_filesz;
+      size_t pgbrk = page_align(brk);
+      size_t this_max = page_align(ph->p_vaddr + ph->p_memsz);
+      memset((void *)brk, 0, page_offset(pgbrk - brk));
+
+      if (pgbrk - ctx->load_addr < this_max) {
+        void* res = mmap((void*)pgbrk, ctx->load_addr + this_max - pgbrk, prot, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0);
+        if (res == MAP_FAILED) {
+          fprintf(stderr, "cannot execute %s: mmap segment of %s failed: %s\n",
+                  ctx->prog_name, ctx->interp_path, strerror(errno));
+          return -1;
+        };
+      }
+    }
+    // useful for debugging
+    //fprintf(stderr, "mmap 0x%lx (0x%lx) at %p (mmap_hint: 0x%lx) (vaddr: 0x%lx, load_addr: 0x%lx, prot: ",
+    //        size,
+    //        ph->p_memsz,
+    //        mapping,
+    //        addr,
+    //        ph->p_vaddr,
+    //        ctx->load_addr);
+    //fprintf(stderr, "%c%c%c",
+    //       ph->p_flags & PF_R ? 'r' : '-',
+    //       ph->p_flags & PF_W ? 'w' : '-',
+    //       ph->p_flags & PF_X ? 'x' : '-');
+    //fprintf(stderr, ")\n");
     if (ctx->load_addr == 0) {
       ctx->load_addr = (unsigned long)mapping - ph->p_vaddr;
       total_mapping.addr = mapping;
