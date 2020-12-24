@@ -67,15 +67,15 @@ static size_t total_mapping_size(Phdr *phdrs, size_t phdr_num) {
 }
 
 static inline unsigned long page_start(unsigned long v) {
-  return v & ~(PAGE_SIZE - 1);
+  return v & ~(getpagesize() - 1);
 }
 
 static inline unsigned long page_offset(unsigned long v) {
-  return v & (PAGE_SIZE - 1);
+  return v & (getpagesize() - 1);
 }
 
 static inline unsigned long page_align(unsigned long v) {
-  return (v + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+  return (v + getpagesize() - 1) & ~(getpagesize() - 1);
 }
 
 static inline int32_t prot_flags(uint32_t p_flags) {
@@ -242,10 +242,31 @@ static int elf_load(struct ld_ctx *ctx) {
   return 0;
 }
 
-
+// Musl defines this as CRT_JMP in musl/arch/<cpuarch>/reloc.h
 static inline _Noreturn void jmp_ld(void(*entry_point)(void), void* stackp) {
-  asm("mov %0, %%rsp; jmp *%1"
-      :: "r" (stackp), "r" (entry_point));
+#if defined(__x86_64__)
+  __asm__("mov %0, %%rsp; jmp *%1"
+      :: "r" (stackp), "r" (entry_point)
+      : "memory");
+#elif defined(__i386__)
+  __asm__("mov %0, %%esp; jmp *%1"
+      :: "r" (stackp), "r" (entry_point)
+      : "memory");
+#elif defined(__aarch64__)
+  __asm__("mov sp, %0; br %1"
+      :: "r" (stackp), "r" (entry_point)
+      : "memory");
+#elif defined(__arm__)
+  __asm__("mov sp, %0; bx %1"
+      :: "r" (stackp), "r" (entry_point)
+      : "memory");
+#elif defined(__riscv)
+  __asm__("mv sp, %0 ; jr %1"
+      :: "r" (stackp), "r" (entry_point)
+      : "memory");
+#else
+#error unsupported architecture
+#endif
   __builtin_unreachable();
 }
 
