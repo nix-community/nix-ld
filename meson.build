@@ -3,6 +3,8 @@ project('nix-ld', ['c'],
         default_options : ['warning_level=2'],
         meson_version : '>= 0.47')
 
+conf = configuration_data()
+
 possible_cc_flags = [
   '-ffast-math',
   '-fno-common',
@@ -29,17 +31,27 @@ endif
 add_project_arguments(cc.get_supported_arguments(possible_cc_flags), language : 'c')
 add_project_link_arguments(cc.get_supported_link_arguments(possible_link_flags), language : 'c')
 
-musl_lib = get_option('musl-lib')
-musl_includes = get_option('musl-includes')
 
+nix_system = get_option('nix-system')
+if nix_system == ''
+  error('-Dnix-system is not set')
+endif
+conf.set_quoted('NIX_SYSTEM', nix_system)
+
+musl_lib = get_option('musl-lib')
 if musl_lib == ''
   error('-Dmusl-lib is not set')
 endif
 
+musl_includes = get_option('musl-includes')
 if musl_includes == ''
   error('-Dmusl-includes is not set')
 endif
 
+configure_file(input : 'config.h.in',
+  output : 'config.h',
+  configuration : conf)
+config_inc = include_directories('.')
 
 nix_ld = executable('nix-ld',
                     ['nix-ld.c'],
@@ -55,6 +67,7 @@ nix_ld = executable('nix-ld',
                       '-B' + musl_lib,
                       '-L' + musl_lib,
                     ],
-                    pie : true)
+                    pie : true,
+                    include_directories : config_inc)
 
 subdir('test')

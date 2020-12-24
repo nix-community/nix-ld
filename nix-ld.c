@@ -11,6 +11,8 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include "config.h"
+
 static inline void closep(int *fd) { close(*fd); }
 static inline void freep(void *p) { free(*(void **)p); }
 
@@ -266,9 +268,15 @@ static inline _Noreturn void jmp_ld(void (*entry_point)(void), void *stackp) {
 int main(int argc, char **argv) {
   struct ld_ctx ctx = {};
   ctx.prog_name = argv[0];
-  ctx.interp_path = secure_getenv("NIX_LD" #SYSTEM) || secure_getenv("NIX_LD");
+  ctx.interp_path = secure_getenv("NIX_LD_" NIX_SYSTEM);
+  if (!ctx.interp_path) {
+    ctx.interp_path = secure_getenv("NIX_LD");
+  }
 
-  const char *lib_path = secure_getenv("NIX_LD_LIBRARY_PATH");
+  char *lib_path = secure_getenv("NIX_LD_LIBRARY_PATH_" NIX_SYSTEM);
+  if (!lib_path) {
+    lib_path = secure_getenv("NIX_LD_LIBRARY_PATH");
+  }
 
   if (!ctx.interp_path) {
     fprintf(stderr, "cannot execute '%s': $NIX_LD is not set\n", argv[0]);

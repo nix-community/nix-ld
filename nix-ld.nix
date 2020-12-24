@@ -9,6 +9,7 @@ let
     nativeBuildInputs = [ meson ninja ];
 
     mesonFlags = [
+      "-Dnix-system=${system}"
       "-Dmusl-lib=${lib.getLib musl}/lib"
       "-Dmusl-includes=${lib.getDev musl}/include"
     ];

@@ -1,3 +1,5 @@
+option('nix-system', type : 'string',
+       description : '''System name as defined by builtins.currentSystem in nix''')
 option('musl-lib', type : 'string',
        description : '''Path to musl library directory''')
 option('musl-includes', type : 'string',
