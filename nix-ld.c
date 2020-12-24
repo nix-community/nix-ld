@@ -2,6 +2,7 @@
 #include <elf.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,7 +10,6 @@
 #include <sys/auxv.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#include <limits.h>
 
 static inline void closep(int *fd) { close(*fd); }
 static inline void freep(void *p) { free(*(void **)p); }
@@ -107,7 +107,8 @@ static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
     const int32_t prot = prot_flags(ph->p_flags);
 
     unsigned long addr = ctx->load_addr + page_start(ph->p_vaddr);
-    size_t size = page_align(ph->p_vaddr + ph->p_memsz) - page_start(ph->p_vaddr);
+    size_t size =
+        page_align(ph->p_vaddr + ph->p_memsz) - page_start(ph->p_vaddr);
     if (!ctx->load_addr) {
       // mmap the whole library range to reserve the area,
       // later smaller parts will be mmaped over it.
@@ -133,7 +134,8 @@ static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
       memset((void *)brk, 0, page_offset(pgbrk - brk));
 
       if (pgbrk - ctx->load_addr < this_max) {
-        void* res = mmap((void*)pgbrk, ctx->load_addr + this_max - pgbrk, prot, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0);
+        void *res = mmap((void *)pgbrk, ctx->load_addr + this_max - pgbrk, prot,
+                         MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, -1, 0);
         if (res == MAP_FAILED) {
           fprintf(stderr, "cannot execute %s: mmap segment of %s failed: %s\n",
                   ctx->prog_name, ctx->interp_path, strerror(errno));
@@ -142,18 +144,19 @@ static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
       }
     }
     // useful for debugging
-    //fprintf(stderr, "mmap 0x%lx (0x%lx) at %p (mmap_hint: 0x%lx) (vaddr: 0x%lx, load_addr: 0x%lx, prot: ",
+    // fprintf(stderr, "mmap 0x%lx (0x%lx) at %p (mmap_hint: 0x%lx) (vaddr:
+    // 0x%lx, load_addr: 0x%lx, prot: ",
     //        size,
     //        ph->p_memsz,
     //        mapping,
     //        addr,
     //        ph->p_vaddr,
     //        ctx->load_addr);
-    //fprintf(stderr, "%c%c%c",
+    // fprintf(stderr, "%c%c%c",
     //       ph->p_flags & PF_R ? 'r' : '-',
     //       ph->p_flags & PF_W ? 'w' : '-',
     //       ph->p_flags & PF_X ? 'x' : '-');
-    //fprintf(stderr, ")\n");
+    // fprintf(stderr, ")\n");
     if (ctx->load_addr == 0) {
       ctx->load_addr = (unsigned long)mapping - ph->p_vaddr;
       total_mapping.addr = mapping;
@@ -243,27 +246,17 @@ static int elf_load(struct ld_ctx *ctx) {
 }
 
 // Musl defines this as CRT_JMP in musl/arch/<cpuarch>/reloc.h
-static inline _Noreturn void jmp_ld(void(*entry_point)(void), void* stackp) {
+static inline _Noreturn void jmp_ld(void (*entry_point)(void), void *stackp) {
 #if defined(__x86_64__)
-  __asm__("mov %0, %%rsp; jmp *%1"
-      :: "r" (stackp), "r" (entry_point)
-      : "memory");
+  __asm__("mov %0, %%rsp; jmp *%1" ::"r"(stackp), "r"(entry_point) : "memory");
 #elif defined(__i386__)
-  __asm__("mov %0, %%esp; jmp *%1"
-      :: "r" (stackp), "r" (entry_point)
-      : "memory");
+  __asm__("mov %0, %%esp; jmp *%1" ::"r"(stackp), "r"(entry_point) : "memory");
 #elif defined(__aarch64__)
-  __asm__("mov sp, %0; br %1"
-      :: "r" (stackp), "r" (entry_point)
-      : "memory");
+  __asm__("mov sp, %0; br %1" ::"r"(stackp), "r"(entry_point) : "memory");
 #elif defined(__arm__)
-  __asm__("mov sp, %0; bx %1"
-      :: "r" (stackp), "r" (entry_point)
-      : "memory");
+  __asm__("mov sp, %0; bx %1" ::"r"(stackp), "r"(entry_point) : "memory");
 #elif defined(__riscv)
-  __asm__("mv sp, %0 ; jr %1"
-      :: "r" (stackp), "r" (entry_point)
-      : "memory");
+  __asm__("mv sp, %0 ; jr %1" ::"r"(stackp), "r"(entry_point) : "memory");
 #else
 #error unsupported architecture
 #endif
@@ -273,7 +266,7 @@ static inline _Noreturn void jmp_ld(void(*entry_point)(void), void* stackp) {
 int main(int argc, char **argv) {
   struct ld_ctx ctx = {};
   ctx.prog_name = argv[0];
-  ctx.interp_path = secure_getenv("NIX_LD");
+  ctx.interp_path = secure_getenv("NIX_LD" #SYSTEM) || secure_getenv("NIX_LD");
 
   const char *lib_path = secure_getenv("NIX_LD_LIBRARY_PATH");
 
@@ -287,11 +280,12 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  const size_t *stackp = ((size_t*)argv - 1);
+  const size_t *stackp = ((size_t *)argv - 1);
   char **envp;
-  for (envp = &argv[argc + 1]; *envp; envp++);
+  for (envp = &argv[argc + 1]; *envp; envp++)
+    ;
 
-  size_t* auxv = (size_t*)(envp + 1);
+  size_t *auxv = (size_t *)(envp + 1);
 
   // AT_BASE points to us, we need to point it to the new interpreter
   for (; auxv[0]; auxv += 2) {
@@ -303,8 +297,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  jmp_ld((void(*)(void))ctx.entry_point, (void*)stackp);
-
+  jmp_ld((void (*)(void))ctx.entry_point, (void *)stackp);
 
   return 0;
 }
