@@ -1,8 +1,10 @@
 #define _GNU_SOURCE
+#include <assert.h>
 #include <elf.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,7 +15,7 @@
 
 #include "config.h"
 
-static inline void closep(int *fd) { close(*fd); }
+static inline void closep(const int *fd) { close(*fd); }
 static inline void freep(void *p) { free(*(void **)p); }
 
 #define _cleanup_(f) __attribute__((cleanup(f)))
@@ -36,7 +38,11 @@ typedef struct {
 
 struct ld_ctx {
   const char *prog_name;
-  const char *interp_path;
+  const char *nix_ld;
+  const char *nix_ld_lib_path;
+  const char *ld_lib_path;
+  const char *nix_ld_env_prefix;
+  const char *nix_lib_path_prefix;
 
   // filled out by elf_load
   unsigned long load_addr;
@@ -48,6 +54,38 @@ static inline void munmapp(mmap_t *m) {
   if (m->size) {
     munmap(m->addr, m->size);
   }
+}
+
+static void log_error(struct ld_ctx *ctx, const char *format, ...) {
+  va_list args;
+  fprintf(stderr, "cannot execute %s: ", ctx->prog_name);
+
+  va_start(args, format);
+  vfprintf(stderr, format, args);
+  va_end(args);
+
+  fputc('\n', stderr);
+}
+
+struct ld_ctx init_ld_ctx(char **argv) {
+  struct ld_ctx ctx = {
+      .prog_name = argv[0],
+      .ld_lib_path = secure_getenv("LD_LIBRARY_PATH"),
+      .nix_ld = secure_getenv("NIX_LD_" NIX_SYSTEM),
+      .nix_ld_lib_path = secure_getenv("NIX_LD_LIBRARY_PATH_" NIX_SYSTEM),
+      .nix_lib_path_prefix = "NIX_LD_LIBRARY_PATH_" NIX_SYSTEM "=",
+  };
+
+  if (!ctx.nix_ld) {
+    ctx.nix_ld = secure_getenv("NIX_LD");
+  }
+
+  if (!ctx.nix_ld_lib_path) {
+    ctx.nix_lib_path_prefix = "NIX_LD_LIBRARY_PATH=";
+    ctx.nix_ld_lib_path = secure_getenv("NIX_LD_LIBRARY_PATH");
+  }
+
+  return ctx;
 }
 
 static size_t total_mapping_size(Phdr *phdrs, size_t phdr_num) {
@@ -90,9 +128,7 @@ static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
   const size_t total_size = total_mapping_size(prog_headers, headers_num);
 
   if (total_size == 0) {
-    fprintf(stderr,
-            "cannot execute %s: no program headers found in $NIX_LD (%s)",
-            ctx->prog_name, ctx->interp_path);
+    log_error(ctx, "no program headers found in $NIX_LD (%s)", ctx->nix_ld);
     return -1;
   }
 
@@ -124,8 +160,8 @@ static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
 
     void *mapping = mmap((void *)addr, size, prot, flags, fd, off_start);
     if (mapping == MAP_FAILED) {
-      fprintf(stderr, "cannot execute %s: mmap segment of %s failed: %s\n",
-              ctx->prog_name, ctx->interp_path, strerror(errno));
+      log_error(ctx, "mmap segment of %s failed: %s", ctx->nix_ld,
+                strerror(errno));
       return -1;
     }
 
@@ -139,8 +175,8 @@ static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
         void *res = mmap((void *)pgbrk, ctx->load_addr + this_max - pgbrk, prot,
                          MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, -1, 0);
         if (res == MAP_FAILED) {
-          fprintf(stderr, "cannot execute %s: mmap segment of %s failed: %s\n",
-                  ctx->prog_name, ctx->interp_path, strerror(errno));
+          log_error(ctx, "mmap segment of %s failed: %s", ctx->nix_ld,
+                    strerror(errno));
           return -1;
         };
       }
@@ -172,68 +208,59 @@ static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
 }
 
 static int elf_load(struct ld_ctx *ctx) {
-  _cleanup_close_ int fd = open(ctx->interp_path, O_RDONLY);
+  const _cleanup_close_ int fd = open(ctx->nix_ld, O_RDONLY);
   if (fd < 0) {
-    fprintf(stderr, "cannot execute '%s': cannot open $NIX_LD (%s): %s\n",
-            ctx->prog_name, ctx->interp_path, strerror(errno));
+    log_error(ctx, "cannot open $NIX_LD (%s): %s", ctx->nix_ld,
+              strerror(errno));
     return -1;
   }
   Ehdr header = {};
   ssize_t res = read(fd, &header, sizeof(header));
   if (res < 0) {
-    fprintf(stderr,
-            "cannot execute '%s': cannot read elf header of $NIX_LD (%s): %s\n",
-            ctx->prog_name, ctx->interp_path, strerror(errno));
+    log_error(ctx, "cannot read elf header of $NIX_LD (%s): %s", ctx->nix_ld,
+              strerror(errno));
     return -1;
   }
 
   if (memcmp(header.e_ident, ELFMAG, SELFMAG) != 0) {
-    fprintf(stderr,
-            "cannot execute '%s': $NIX_LD (%s) is not an elf file: %s\n",
-            ctx->prog_name, ctx->interp_path, strerror(errno));
+    log_error(ctx, "$NIX_LD (%s) is not an elf file: %s", ctx->nix_ld,
+              strerror(errno));
     return -1;
   }
 
   // TODO also support dynamic excutable
   if (header.e_type != ET_DYN) {
-    fprintf(stderr,
-            "cannot execute '%s': $NIX_LD (%s) is not a dynamic library\n",
-            ctx->prog_name, ctx->interp_path);
+    log_error(ctx, "$NIX_LD (%s) is not a dynamic library", ctx->nix_ld,
+              strerror(errno));
     return -1;
   }
 
-  size_t ph_size = sizeof(Phdr) * header.e_phnum;
+  const size_t ph_size = sizeof(Phdr) * header.e_phnum;
   // XXX binfmt_elf also checks ELF_MIN_ALIGN here
   if (ph_size == 0 || ph_size > 65536) {
-    fprintf(
-        stderr,
-        "cannot execute %s: $NIX_LD (%s) has incorrect program header size: "
-        "%zu\n",
-        ctx->prog_name, ctx->interp_path, ph_size);
+    log_error(ctx, "$NIX_LD (%s) has incorrect program header size: %zu",
+              ctx->nix_ld, ph_size);
     return -1;
   }
 
   _cleanup_free_ Phdr *prog_headers = malloc(ph_size);
   if (!prog_headers) {
-    fprintf(stderr, "cannot execute '%s': cannot allocate program headers\n",
-            ctx->prog_name);
+    log_error(ctx, "cannot allocate program headers");
     return -1;
   }
   res = read(fd, prog_headers, ph_size);
 
   if (res < 0) {
-    fprintf(stderr,
-            "cannot execute '%s': cannot read program headers of elf "
-            "interpreter: %s\n",
-            ctx->prog_name, strerror(errno));
+    log_error(ctx, "cannot read program headers of elf interpreter: %s",
+              strerror(errno));
     return -1;
   }
 
   if ((size_t)res != ph_size) {
-    fprintf(stderr,
-            "cannot execute '%s': less program headers in elf interpreter than "
-            "expected: %zu != %zu\n",
-            ctx->prog_name, (size_t)res, ph_size);
+    log_error(
+        ctx,
+        "less program headers in elf interpreter than expected: %zu != %zu",
+        (size_t)res, ph_size);
     return -1;
   }
 
@@ -265,21 +292,79 @@ static inline _Noreturn void jmp_ld(void (*entry_point)(void), void *stackp) {
   __builtin_unreachable();
 }
 
+void insert_ld_library_path(struct ld_ctx *ctx, char **envp) {
+  for (; *envp; envp++) {
+    // we re-use the NIX_LD_LIBRARY_PATH slot to populate LD_LIBRARY_PATH
+    if (strncmp(ctx->nix_lib_path_prefix, *envp,
+                strlen(ctx->nix_lib_path_prefix)) != 0) {
+      continue;
+    }
+    const size_t old_len = strlen(ctx->nix_lib_path_prefix);
+    const size_t new_len = strlen("LD_LIBRARY_PATH=");
+
+    // insert new shorter variable
+    memcpy(*envp, "LD_LIBRARY_PATH=", new_len);
+    // shift the old content left
+    memmove(*envp + new_len, *envp + old_len,
+            strlen(*envp) + new_len - old_len);
+    return;
+  }
+  log_error(ctx, "BUG could not set LD_LIBRARY_PATH from NIX_LD_LIBRARY_PATH: "
+                 "NIX_LD_LIBRARY_PATH not found");
+  abort();
+}
+
+int update_ld_library_path(struct ld_ctx *ctx, char **envp) {
+  const size_t prefix_len = strlen("LD_LIBRARY_PATH=");
+
+  for (; *envp; envp++) {
+    if (strncmp("LD_LIBRARY_PATH=", *envp, prefix_len) != 0) {
+      continue;
+    }
+    const size_t var_len = strlen(*envp);
+    const char *sep;
+    if (var_len == prefix_len || (*envp)[var_len] == ':') {
+      // empty library path or ends with :
+      sep = "";
+    } else {
+      sep = ":";
+    }
+    const size_t new_size =
+        var_len + strlen(sep) + strlen(ctx->nix_ld_lib_path) + 1;
+    char *new_str = malloc(new_size);
+    if (!new_str) {
+      return -ENOMEM;
+    }
+    // same as LD_LIBRARY_PATH=oldvalue:$NIX_LD_LIBRARY_PATH
+    snprintf(new_str, new_size, "%s%s%s", *envp, sep, ctx->nix_ld_lib_path);
+
+    *envp = new_str;
+    return 0;
+  }
+
+  log_error(
+      ctx,
+      "BUG could not append to LD_LIBRARY_PATH: LD_LIBRARY_PATH not found");
+  abort();
+}
+
+void fix_auxv(size_t *auxv, size_t load_addr) {
+  // AT_BASE points to us, we need to point it to the new interpreter
+  for (; auxv[0]; auxv += 2) {
+    size_t key = auxv[0];
+    size_t *value = &auxv[1];
+    if (key == AT_BASE) {
+      *value = load_addr;
+      break;
+    }
+  }
+}
+
 int main(int argc, char **argv) {
-  struct ld_ctx ctx = {};
-  ctx.prog_name = argv[0];
-  ctx.interp_path = secure_getenv("NIX_LD_" NIX_SYSTEM);
-  if (!ctx.interp_path) {
-    ctx.interp_path = secure_getenv("NIX_LD");
-  }
+  struct ld_ctx ctx = init_ld_ctx(argv);
 
-  char *lib_path = secure_getenv("NIX_LD_LIBRARY_PATH_" NIX_SYSTEM);
-  if (!lib_path) {
-    lib_path = secure_getenv("NIX_LD_LIBRARY_PATH");
-  }
-
-  if (!ctx.interp_path) {
-    fprintf(stderr, "cannot execute '%s': $NIX_LD is not set\n", argv[0]);
+  if (!ctx.nix_ld) {
+    log_error(&ctx, "NIX_LD or NIX_LD_" NIX_SYSTEM " is not set");
     return 1;
   }
 
@@ -289,20 +374,18 @@ int main(int argc, char **argv) {
   }
 
   const size_t *stackp = ((size_t *)argv - 1);
-  char **envp;
-  for (envp = &argv[argc + 1]; *envp; envp++)
-    ;
+  char **envp = &argv[argc + 1];
 
-  size_t *auxv = (size_t *)(envp + 1);
+  size_t *auxv;
+  for (auxv = (size_t *)envp; *auxv; auxv++) {
+  }
+  auxv++;
+  fix_auxv(auxv, ctx.load_addr);
 
-  // AT_BASE points to us, we need to point it to the new interpreter
-  for (; auxv[0]; auxv += 2) {
-    size_t key = auxv[0];
-    size_t *value = &auxv[1];
-    if (key == AT_BASE) {
-      *value = ctx.load_addr;
-      break;
-    }
+  if (ctx.ld_lib_path) {
+    update_ld_library_path(&ctx, envp);
+  } else if (ctx.nix_ld_lib_path) {
+    insert_ld_library_path(&ctx, envp);
   }
 
   jmp_ld((void (*)(void))ctx.entry_point, (void *)stackp);
