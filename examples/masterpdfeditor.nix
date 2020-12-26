@@ -11,6 +11,8 @@ mkShell {
   ];
   QT_PLUGIN_PATH = "${qt5.qtbase}/${qt5.qtbase.qtPluginPrefix}";
   shellHook = ''
+    export NIX_LD="$(cat $NIX_CC/nix-support/dynamic-linker)"
+
     if [ ! -d master-pdf-editor ]; then
       echo "unpack master-pdf-editor..."
       mkdir master-pdf-editor
