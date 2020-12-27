@@ -56,6 +56,7 @@ config_inc = include_directories('.')
 nix_ld = executable('nix-ld',
                     ['nix-ld.c'],
                     install : true,
+                    install_dir: get_option('libexecdir'),
                     link_args : [
                       '-static-pie',
                       '-B' + musl_lib,
