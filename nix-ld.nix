@@ -17,7 +17,7 @@ let
     ];
 
     postInstall = ''
-      mkdir $out/nix-support
+      mkdir -p $out/nix-support
       basename $(< ${stdenv.cc}/nix-support/dynamic-linker) > $out/nix-support/ld-name
     '';
 
