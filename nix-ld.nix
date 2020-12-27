@@ -10,12 +10,16 @@ let
 
     mesonFlags = [
       "-Dnix-system=${system}"
+      # our glibc is not compiled with support for static pie binaries,
+      # also the musl binary is only 1/10 th of the size of the glibc binary
       "-Dmusl-lib=${lib.getLib musl}/lib"
       "-Dmusl-includes=${lib.getDev musl}/include"
     ];
 
-    # our glibc is not compiled with support for static pie binaries,
-    # also the musl binary is only 1/10 th of the size of the glibc binary
+    postInstall = ''
+      mkdir $out/nix-support
+      basename $(< ${stdenv.cc}/nix-support/dynamic-linker) > $out/nix-support/ld-name
+    '';
 
     passthru.tests = import ./nixos-test.nix {
       makeTest = import (path + "/nixos/tests/make-test-python.nix");
