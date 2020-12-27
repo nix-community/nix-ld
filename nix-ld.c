@@ -382,10 +382,12 @@ int main(int argc, char **argv) {
   auxv++;
   fix_auxv(auxv, ctx.load_addr);
 
-  if (ctx.ld_lib_path) {
-    update_ld_library_path(&ctx, envp);
-  } else if (ctx.nix_ld_lib_path) {
-    insert_ld_library_path(&ctx, envp);
+  if (ctx.nix_ld_lib_path) {
+    if (ctx.ld_lib_path) {
+      update_ld_library_path(&ctx, envp);
+    } else {
+      insert_ld_library_path(&ctx, envp);
+    }
   }
 
   jmp_ld((void (*)(void))ctx.entry_point, (void *)stackp);
