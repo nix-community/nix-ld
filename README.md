@@ -25,11 +25,12 @@ $ sudo nix-channel --update
 `/etc/nixos/configuration.nix`
 
 ```nix
-imports = [
-  <nix-ld/modules/nix-ld.nix>
-];
+{
+  imports = [
+    <nix-ld/modules/nix-ld.nix>
+  ];
+}
 ```
-
 
 ### With nix flake 
 
