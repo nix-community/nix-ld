@@ -207,8 +207,22 @@ static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
   return 0;
 }
 
+int open_ld(const char *path) {
+  const int fd = open(path, O_RDONLY);
+  size_t l = strlen(path);
+  // ${stdenv.cc}/nix-support/dynamic-linker contains trailing newline
+  if (fd < 0 && errno == ENOENT && path[l - 1] == '\n') {
+    _cleanup_free_ const char *path_trunc = strndup(path, l - 1);
+    if (!path_trunc) {
+      return -1;
+    }
+    return open(path_trunc, O_RDONLY);
+  }
+  return fd;
+}
+
 static int elf_load(struct ld_ctx *ctx) {
-  const _cleanup_close_ int fd = open(ctx->nix_ld, O_RDONLY);
+  const _cleanup_close_ int fd = open_ld(ctx->nix_ld);
   if (fd < 0) {
     log_error(ctx, "cannot open $NIX_LD (%s): %s", ctx->nix_ld,
               strerror(errno));
