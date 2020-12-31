@@ -1,19 +1,19 @@
 # nix-ld
 
 Run unpatched dynamic binaries on NixOS. Precompiled binaries not build for
-NixOS usually  have the so called link-loader hard coded to a path i.e.
-`/lib64/ld-linux-x86-64.so.2` on Linux on the x86_64 architecture.
+NixOS usually have a so called link-loader hard coded.
+On Linux/x86_64 this is i.e. `/lib64/ld-linux-x86-64.so.2` for glibc.
 NixOS on the other hand has its dynamic linker usually in the glibc
-package in the nix store and therefore cannot run this binary.
+package in the nix store and therefore cannot run those binaries.
 Nix-ld provides a shim layer for these kind of binaries. It
 is installed to the same location where other Linux distributions 
-install there link loader i.e. `/lib64/ld-linux-x86-64.so.2` and
+install their link loader i.e. `/lib64/ld-linux-x86-64.so.2` and
 it will chainload the actual link loader as specified in the environment
 variable `NIX_LD`. Furthermore it also accepts a comma seperated
 path of library lookup paths in `NIX_LD_LIBRARY_PATH`. This environment
 variable will be rewritten to `LD_LIBRARY_PATH` before passing execution
 to the actual ld. This allows to specify additional libraries that the
-executable might need for execution.
+executable needed for execution.
 
 ## Installation
 
@@ -60,4 +60,21 @@ actual hostname of your system.
 
 ## Usage
 
-TODO
+After setting up the nix-ld symlink as described above one needs to  set
+`NIX_LD` and `NIX_LD_LIBRARY_PATH` to run executables.  This can be for example
+be done with a `shell.nix` in a nix-shell like this:
+
+```nix
+{
+  NIX_LD_LIBRARY_PATH = lib.makeLibraryPath [
+    stdenv.cc.cc
+    openssl
+    # ...
+  ];
+  NIX_LD = builtins.readFile "${stdenv.cc}/nix-support/dynamic-linker";
+}
+```
+
+A full example is shown in `./examples/masterpdfeditor.nix`.
+In [nix-autobahn](https://github.com/Lassulus/nix-autobahn) there is also a
+script called `nix-autobahn-ld` that automate generating shell expressions.

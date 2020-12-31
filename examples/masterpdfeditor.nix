@@ -1,5 +1,8 @@
 with import <nixpkgs> {};
 
+# run with
+# $ nix-shell ./masterpdfeditor.nix
+
 mkShell {
   NIX_LD_LIBRARY_PATH = lib.makeLibraryPath [
     nss
