@@ -18,7 +18,7 @@ executable needs for execution.
 ## Installation
 
 ```sh
-$ sudo nix-channel --add https://github.com/Mic92/nix-ld/archive/master.tar.gz nix-ld
+$ sudo nix-channel --add https://github.com/Mic92/nix-ld/archive/main.tar.gz nix-ld
 $ sudo nix-channel --update
 ```
 
