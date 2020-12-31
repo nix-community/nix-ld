@@ -52,7 +52,7 @@ actual hostname of your system.
         # ... add this line to the rest of your configuration modules
         nix-ld.nixosModules.nix-ld
       ];
-    }
+    };
   };
 }
 ```
