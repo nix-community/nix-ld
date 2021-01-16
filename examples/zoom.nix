@@ -7,39 +7,34 @@ let
     sha256 = "11va3px42y81bwy10mxm7mk0kf2sni9gwb422pq9djck2dgchw5x";
   };
 in mkShell {
-  # Based on https://support.zoom.us/hc/en-us/articles/204206269-Installing-or-updating-Zoom-on-Linux#h_eabd7b65-e032-450b-b65d-83ec6f75e0b5
-  # and : $ find . -type f -iname '*.so*' | LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH:$PWD xargs -n1 ldd | grep 'not found' | sort -u
   NIX_LD_LIBRARY_PATH = lib.makeLibraryPath [
-    xorg.libX11
-    xorg.libXfixes
-    glib
-    libGL
-    sqlite
-    cairo
-    atk
-    xorg.libXrender
-    xorg.libXcomposite
-    libxslt
-    wayland
-    gst_all_1.gst-plugins-base
-    xorg.libxcb
-    xorg.xcbutilimage
-    xorg.xcbutilkeysyms
-    xorg.libXtst
-    xorg.libXext
+    # found by
+    # $ LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH:$PWD ldd zoom | grep 'not found'
     alsaLib
-    pulseaudio
-    udev
-    xorg.libXi
-    xorg.libSM
+    atk
+    cairo
+    dbus
+    libGL
     fontconfig
     freetype
-    libxkbcommon
     gtk3
-
-    dbus
+    gdk-pixbuf
+    glib
+    pango
+    pulseaudio
     stdenv.cc.cc
+    wayland
+    xorg.libX11
+    xorg.libxcb
+    xorg.libXcomposite
+    xorg.libXext
+    libxkbcommon
+    xorg.libXrender
     zlib
+    xorg.xcbutilimage
+    xorg.xcbutilkeysyms
+    xorg.libXfixes
+    xorg.libXtst
   ];
   NIX_LD = builtins.readFile "${stdenv.cc}/nix-support/dynamic-linker";
   shellHook = ''
