@@ -3,8 +3,8 @@ with import <nixpkgs> {};
 let
   version = "5.4.57862.0110";
   src = fetchurl {
-    url = "https://zoom.us/client/${version}/zoom_x86_64.tar.xz";
-    sha256 = "11va3px42y81bwy10mxm7mk0kf2sni9gwb422pq9djck2dgchw5x";
+    url = "https://zoom.us/client/${version}/zoom_x86_64.pkg.tar.xz";
+    sha256 = "sha256-ZAwXhbZ3nT6PGkSC1vnX2y/XUOZfped0r3OuedI62gY=";
   };
 in mkShell {
   NIX_LD_LIBRARY_PATH = lib.makeLibraryPath [
@@ -21,8 +21,8 @@ in mkShell {
     gdk-pixbuf
     glib
     pango
-    pulseaudio
     stdenv.cc.cc
+    pulseaudio
     wayland
     xorg.libX11
     xorg.libxcb
@@ -42,10 +42,10 @@ in mkShell {
       echo "unpack zoom..."
       mkdir zoom
       tar -C zoom \
-          --strip-components 1 \
           -xf ${src}
     fi
-    echo '$ ./zoom/zoom.sh'
-    ./zoom/zoom.sh
+    export LD_LIBRARY_PATH=$PWD/zoom/opt/zoom/
+    echo '$ ./zoom/opt/zoom/zoom'
+    ./zoom/opt/zoom/zoom
   '';
 }
