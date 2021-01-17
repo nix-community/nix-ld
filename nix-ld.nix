@@ -1,5 +1,11 @@
 { lib, system, stdenv, musl, meson, ninja, overrideCC, path, pkgs }:
 let
+  musl' = musl.overrideAttrs (old: {
+    # XXX: it would be nice to find out why this breaks. Is TLS from glibc binaries incompatible with musl?
+    patches = old.patches or [] ++ [
+      ./patches/0001-ignore-tls-section-in-static-binaries.patch
+    ];
+  });
   self = stdenv.mkDerivation rec {
     name = "nix-ld";
     src = ./.;
@@ -12,8 +18,8 @@ let
       "-Dnix-system=${system}"
       # our glibc is not compiled with support for static pie binaries,
       # also the musl binary is only 1/10 th of the size of the glibc binary
-      "-Dmusl-lib=${lib.getLib musl}/lib"
-      "-Dmusl-includes=${lib.getDev musl}/include"
+      "-Dmusl-lib=${lib.getLib musl'}/lib"
+      "-Dmusl-includes=${lib.getDev musl'}/include"
     ];
 
     postInstall = ''
