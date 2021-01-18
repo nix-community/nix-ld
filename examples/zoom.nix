@@ -45,7 +45,7 @@ in mkShell {
           -xf ${src}
     fi
     export LD_LIBRARY_PATH=$PWD/zoom/opt/zoom/
-    echo '$ ./zoom/opt/zoom/zoom'
-    ./zoom/opt/zoom/zoom
+    echo '$ ./zoom/opt/zoom/ZoomLauncher'
+    ./zoom/opt/zoom/ZoomLauncher
   '';
 }
