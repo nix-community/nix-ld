@@ -22,6 +22,6 @@ test('patched-example-lib', sh,
      args : [ '-c', 'LD_DEBUG=libs ' + patched_example_bin.full_path() ],
      env : [
        'NIX_LD_LIBRARY_PATH=.',
-       'NIX_LD=' + interpreter.stdout().strip()
+       'NIX_LD=' + interpreter.stdout()
      ],
      depends : [ patched_example_bin ])
