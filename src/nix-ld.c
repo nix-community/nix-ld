@@ -1,34 +1,31 @@
-#define _GNU_SOURCE
-#include <assert.h>
-#include <elf.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <limits.h>
-#include <stdarg.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/auxv.h>
-#include <sys/mman.h>
-#include <unistd.h>
+#include <linux/elf.h>
+#include <linux/auxvec.h>
+#include <linux/mman.h>
 
-#include "config.h"
+#include <nolibc.h>
+
+#include "strerror.h"
+#include "mmap.h"
+#include <printf.c>
+#include <config.h>
+
+#define alloca __builtin_alloca
 
 static inline void closep(const int *fd) { close(*fd); }
-static inline void freep(void *p) { free(*(void **)p); }
 
 #define _cleanup_(f) __attribute__((cleanup(f)))
 #define _cleanup_close_ _cleanup_(closep)
-#define _cleanup_free_ _cleanup_(freep)
-#define _cleanup__ _cleanup_(free)
 
-#if UINTPTR_MAX == 0xffffffff
+#if PTR_SIZE == 4
+#define UINTPTR_MAX
 typedef Elf32_Ehdr Ehdr;
 typedef Elf32_Phdr Phdr;
-#else
+#elif PTR_SIZE == 8
+#define UINTPTR_MAX 0xffffffffffffffffu
 typedef Elf64_Ehdr Ehdr;
 typedef Elf64_Phdr Phdr;
+#else
+#error unsupported word width
 #endif
 
 typedef struct {
@@ -39,14 +36,16 @@ typedef struct {
 struct ld_ctx {
   const char *prog_name;
   const char *nix_ld;
-  const char *nix_ld_lib_path;
-  const char *ld_lib_path;
+  char *nix_ld_lib_path;
+  char *ld_lib_path;
+  char **ld_lib_path_envp;
   const char *nix_ld_env_prefix;
   const char *nix_lib_path_prefix;
 
   // filled out by elf_load
   unsigned long load_addr;
   unsigned long entry_point;
+  size_t page_size;
   mmap_t mapping;
 };
 
@@ -56,43 +55,80 @@ static inline void munmapp(mmap_t *m) {
   }
 }
 
-static void log_error(struct ld_ctx *ctx, const char *format, ...) {
-  va_list args;
-  fprintf(stderr, "cannot execute %s: ", ctx->prog_name);
-
-  va_start(args, format);
-  vfprintf(stderr, format, args);
-  va_end(args);
-
-  fputc('\n', stderr);
+void _putchar(char c) {
+  // super slow but we only use print stuff in the error case, so it does not matter.
+  write(1, &c, 1);
 }
 
-struct ld_ctx init_ld_ctx(char **argv) {
+static void log_error(struct ld_ctx *ctx, const char *format, ...) {
+  va_list args;
+  printf("cannot execute %s: ", ctx->prog_name);
+
+  va_start(args, format);
+  vprintf(format, args);
+  va_end(args);
+
+  // cannot overflow because vsnprintf leaves space for the null byte
+  printf("\n");
+}
+
+static char *get_env(char* env, const char* key) {
+  size_t key_len = strlen(key);
+
+  if (strlen(env) < key_len) {
+    return NULL;
+  }
+
+  if (memcmp(key, env, key_len) == 0) {
+    return &env[key_len];
+  }
+
+  return NULL;
+}
+
+
+static struct ld_ctx init_ld_ctx(int argc, char **argv, char** envp, size_t *auxv) {
+  // AT_BASE points to us, we need to point it to the new interpreter
   struct ld_ctx ctx = {
-      .prog_name = argv[0],
-      .ld_lib_path = secure_getenv("LD_LIBRARY_PATH"),
-      .nix_ld = secure_getenv("NIX_LD_" NIX_SYSTEM),
-      .nix_ld_lib_path = secure_getenv("NIX_LD_LIBRARY_PATH_" NIX_SYSTEM),
+      .prog_name = argc ? argv[0] : "nix-ld",
+      .ld_lib_path = NULL,
+      .nix_ld = NULL,
+      .nix_ld_lib_path = NULL,
       .nix_lib_path_prefix = "NIX_LD_LIBRARY_PATH_" NIX_SYSTEM "=",
   };
 
-  if (!ctx.nix_ld) {
-    ctx.nix_ld = secure_getenv("NIX_LD");
+  for (; auxv[0]; auxv += 2) {
+    if (auxv[0] == AT_PAGESZ) {
+      ctx.page_size = auxv[1];
+      break;
+    }
   }
 
-  if (!ctx.nix_ld_lib_path) {
-    ctx.nix_lib_path_prefix = "NIX_LD_LIBRARY_PATH=";
-    ctx.nix_ld_lib_path = secure_getenv("NIX_LD_LIBRARY_PATH");
+  char *val;
+  for (char **e = envp; *e; e++) {
+    if ((val = get_env(*e, "NIX_LD_" NIX_SYSTEM "="))) {
+      ctx.nix_ld = val;
+    } else if (!ctx.nix_ld && (val = get_env(*e, "NIX_LD="))) {
+      ctx.nix_ld = val;
+    } else if ((val = get_env(*e, ctx.nix_lib_path_prefix))) {
+      ctx.nix_ld_lib_path = val;
+    } else if (!ctx.nix_ld_lib_path && (val = get_env(*e, "NIX_LD_LIBRARY_PATH="))) {
+      ctx.nix_lib_path_prefix = "NIX_LD_LIBRARY_PATH=";
+      ctx.nix_ld_lib_path = val;
+    } else if ((val = get_env(*e, "LD_LIBRARY_PATH="))) {
+      ctx.ld_lib_path = val;
+      ctx.ld_lib_path_envp = e;
+    }
   }
 
   return ctx;
 }
 
-static size_t total_mapping_size(Phdr *phdrs, size_t phdr_num) {
+static size_t total_mapping_size(const Phdr *phdrs, size_t phdr_num) {
   size_t addr_min = UINTPTR_MAX;
   size_t addr_max = 0;
   for (size_t i = 0; i < phdr_num; i++) {
-    Phdr *ph = &phdrs[i];
+    const Phdr *ph = &phdrs[i];
     if (ph->p_type != PT_LOAD || ph->p_memsz == 0) {
       continue;
     }
@@ -106,16 +142,16 @@ static size_t total_mapping_size(Phdr *phdrs, size_t phdr_num) {
   return addr_max - addr_min;
 }
 
-static inline unsigned long page_start(unsigned long v) {
-  return v & ~(getpagesize() - 1);
+static inline unsigned long page_start(struct ld_ctx* ctx, unsigned long v) {
+  return v & ~(ctx->page_size - 1);
 }
 
-static inline unsigned long page_offset(unsigned long v) {
-  return v & (getpagesize() - 1);
+static inline unsigned long page_offset(struct ld_ctx* ctx, unsigned long v) {
+  return v & (ctx->page_size - 1);
 }
 
-static inline unsigned long page_align(unsigned long v) {
-  return (v + getpagesize() - 1) & ~(getpagesize() - 1);
+static inline unsigned long page_align(struct ld_ctx* ctx, unsigned long v) {
+  return (v + ctx->page_size - 1) & ~(ctx->page_size - 1);
 }
 
 static inline int32_t prot_flags(uint32_t p_flags) {
@@ -123,7 +159,7 @@ static inline int32_t prot_flags(uint32_t p_flags) {
          (p_flags & PF_X ? PROT_EXEC : 0);
 }
 
-static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
+static int elf_map(struct ld_ctx *ctx, int fd, const Phdr *prog_headers,
                    size_t headers_num) {
   const size_t total_size = total_mapping_size(prog_headers, headers_num);
 
@@ -137,22 +173,22 @@ static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
   _cleanup_(munmapp) mmap_t total_mapping = {};
 
   for (size_t i = 0; i < headers_num; i++) {
-    Phdr *ph = &prog_headers[i];
+    const Phdr *ph = &prog_headers[i];
     // zero sized segments are valid but we won't mmap them
     if (ph->p_type != PT_LOAD || !ph->p_memsz) {
       continue;
     }
     const int32_t prot = prot_flags(ph->p_flags);
 
-    unsigned long addr = ctx->load_addr + page_start(ph->p_vaddr);
+    unsigned long addr = ctx->load_addr + page_start(ctx, ph->p_vaddr);
     size_t size =
-        page_align(ph->p_vaddr + ph->p_memsz) - page_start(ph->p_vaddr);
+        page_align(ctx, ph->p_vaddr + ph->p_memsz) - page_start(ctx, ph->p_vaddr);
     if (!ctx->load_addr) {
       // mmap the whole library range to reserve the area,
       // later smaller parts will be mmaped over it.
-      size = page_align(total_size);
+      size = page_align(ctx, total_size);
     };
-    off_t off_start = page_start(ph->p_offset);
+    off_t off_start = page_start(ctx, ph->p_offset);
     int flags = MAP_PRIVATE | MAP_FIXED;
     if (!ctx->load_addr) {
       flags = MAP_PRIVATE;
@@ -167,9 +203,9 @@ static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
 
     if (ph->p_memsz > ph->p_filesz && (ph->p_flags & PF_W)) {
       size_t brk = ctx->load_addr + ph->p_vaddr + ph->p_filesz;
-      size_t pgbrk = page_align(brk);
-      size_t this_max = page_align(ph->p_vaddr + ph->p_memsz);
-      memset((void *)brk, 0, page_offset(pgbrk - brk));
+      size_t pgbrk = page_align(ctx, brk);
+      size_t this_max = page_align(ctx, ph->p_vaddr + ph->p_memsz);
+      memset((void *)brk, 0, page_offset(ctx, pgbrk - brk));
 
       if (pgbrk - ctx->load_addr < this_max) {
         void *res = mmap((void *)pgbrk, ctx->load_addr + this_max - pgbrk, prot,
@@ -182,7 +218,7 @@ static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
       }
     }
     // useful for debugging
-    // fprintf(stderr, "mmap 0x%lx (0x%lx) at %p (mmap_hint: 0x%lx) (vaddr:
+    // log_error(stderr, "mmap 0x%lx (0x%lx) at %p (mmap_hint: 0x%lx) (vaddr:
     // 0x%lx, load_addr: 0x%lx, prot: ",
     //        size,
     //        ph->p_memsz,
@@ -190,11 +226,11 @@ static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
     //        addr,
     //        ph->p_vaddr,
     //        ctx->load_addr);
-    // fprintf(stderr, "%c%c%c",
+    // log_error(stderr, "%c%c%c",
     //       ph->p_flags & PF_R ? 'r' : '-',
     //       ph->p_flags & PF_W ? 'w' : '-',
     //       ph->p_flags & PF_X ? 'x' : '-');
-    // fprintf(stderr, ")\n");
+    // log_error(stderr, ")\n");
     if (ctx->load_addr == 0) {
       ctx->load_addr = (unsigned long)mapping - ph->p_vaddr;
       total_mapping.addr = mapping;
@@ -207,16 +243,18 @@ static int elf_map(struct ld_ctx *ctx, int fd, Phdr *prog_headers,
   return 0;
 }
 
-int open_ld(const char *path) {
-  const int fd = open(path, O_RDONLY);
+static int open_ld(const char *path) {
+  const int fd = open(path, O_RDONLY, 0);
   size_t l = strlen(path);
   // ${stdenv.cc}/nix-support/dynamic-linker contains trailing newline
   if (fd < 0 && errno == ENOENT && path[l - 1] == '\n') {
-    _cleanup_free_ const char *path_trunc = strndup(path, l - 1);
+    char *path_trunc = alloca(l);
     if (!path_trunc) {
       return -1;
     }
-    return open(path_trunc, O_RDONLY);
+    memcpy(path_trunc, path, l - 1);
+    path_trunc[l - 1] = '\0';
+    return open(path_trunc, O_RDONLY, 0);
   }
   return fd;
 }
@@ -257,26 +295,17 @@ static int elf_load(struct ld_ctx *ctx) {
     return -1;
   }
 
-  _cleanup_free_ Phdr *prog_headers = malloc(ph_size);
-  if (!prog_headers) {
-    log_error(ctx, "cannot allocate program headers");
-    return -1;
-  }
-  res = read(fd, prog_headers, ph_size);
+  _cleanup_(munmapp) mmap_t header_mapping = {
+    .addr = mmap(NULL, sizeof(Ehdr) + ph_size, PROT_READ, MAP_PRIVATE, fd, 0),
+    .size = sizeof(Ehdr) + ph_size,
+  };
 
-  if (res < 0) {
-    log_error(ctx, "cannot read program headers of elf interpreter: %s",
-              strerror(errno));
+  if (header_mapping.addr == MAP_FAILED) {
+    log_error(ctx, "cannot mmap program headers: %s", strerror(errno));
     return -1;
   }
 
-  if ((size_t)res != ph_size) {
-    log_error(
-        ctx,
-        "less program headers in elf interpreter than expected: %zu != %zu",
-        (size_t)res, ph_size);
-    return -1;
-  }
+  Phdr *prog_headers = header_mapping.addr + sizeof(Ehdr);
 
   int r = elf_map(ctx, fd, prog_headers, header.e_phnum);
   if (r < 0) {
@@ -292,11 +321,11 @@ static int elf_load(struct ld_ctx *ctx) {
 static inline _Noreturn void jmp_ld(void (*entry_point)(void), void *stackp) {
 #if defined(__x86_64__)
   __asm__("mov %0, %%rsp; jmp *%1" ::"r"(stackp), "r"(entry_point) : "memory");
-#elif defined(__i386__)
+#elif defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__)
   __asm__("mov %0, %%esp; jmp *%1" ::"r"(stackp), "r"(entry_point) : "memory");
 #elif defined(__aarch64__)
   __asm__("mov sp, %0; br %1" ::"r"(stackp), "r"(entry_point) : "memory");
-#elif defined(__arm__)
+#elif defined(__ARM_EABI__)
   __asm__("mov sp, %0; bx %1" ::"r"(stackp), "r"(entry_point) : "memory");
 #elif defined(__riscv)
   __asm__("mv sp, %0 ; jr %1" ::"r"(stackp), "r"(entry_point) : "memory");
@@ -306,63 +335,46 @@ static inline _Noreturn void jmp_ld(void (*entry_point)(void), void *stackp) {
   __builtin_unreachable();
 }
 
-void insert_ld_library_path(struct ld_ctx *ctx, char **envp) {
-  for (; *envp; envp++) {
-    // we re-use the NIX_LD_LIBRARY_PATH slot to populate LD_LIBRARY_PATH
-    if (strncmp(ctx->nix_lib_path_prefix, *envp,
-                strlen(ctx->nix_lib_path_prefix)) != 0) {
-      continue;
-    }
-    const size_t old_len = strlen(ctx->nix_lib_path_prefix);
-    const size_t new_len = strlen("LD_LIBRARY_PATH=");
+static void insert_ld_library_path(struct ld_ctx *ctx) {
+  const size_t old_len = strlen(ctx->nix_lib_path_prefix);
+  const size_t new_len = strlen("LD_LIBRARY_PATH=");
 
-    // insert new shorter variable
-    memcpy(*envp, "LD_LIBRARY_PATH=", new_len);
-    // shift the old content left
-    memmove(*envp + new_len, *envp + old_len,
-            strlen(*envp) + new_len - old_len);
-    return;
-  }
-  log_error(ctx, "BUG could not set LD_LIBRARY_PATH from NIX_LD_LIBRARY_PATH: "
-                 "NIX_LD_LIBRARY_PATH not found");
-  abort();
+  char *env = ctx->nix_ld_lib_path - old_len;
+
+  // insert new shorter variable
+  memcpy(env, "LD_LIBRARY_PATH=", new_len);
+  // shift the old content left
+  memmove(env + new_len, ctx->nix_ld_lib_path, strlen(env) + new_len - old_len);
 }
 
-int update_ld_library_path(struct ld_ctx *ctx, char **envp) {
+static int update_ld_library_path(struct ld_ctx *ctx) {
   const size_t prefix_len = strlen("LD_LIBRARY_PATH=");
 
-  for (; *envp; envp++) {
-    if (strncmp("LD_LIBRARY_PATH=", *envp, prefix_len) != 0) {
-      continue;
-    }
-    const size_t var_len = strlen(*envp);
-    const char *sep;
-    if (var_len == prefix_len || (*envp)[var_len] == ':') {
-      // empty library path or ends with :
-      sep = "";
-    } else {
-      sep = ":";
-    }
-    const size_t new_size =
-        var_len + strlen(sep) + strlen(ctx->nix_ld_lib_path) + 1;
-    char *new_str = malloc(new_size);
-    if (!new_str) {
-      return -ENOMEM;
-    }
-    // same as LD_LIBRARY_PATH=oldvalue:$NIX_LD_LIBRARY_PATH
-    snprintf(new_str, new_size, "%s%s%s", *envp, sep, ctx->nix_ld_lib_path);
+  char *env = ctx->ld_lib_path - prefix_len;
+  const size_t var_len = prefix_len + strlen(ctx->ld_lib_path);
+  const char *sep;
+  if (var_len == prefix_len || env[var_len] == ':') {
+    // empty library path or ends with :
+    sep = "";
+  } else {
+    sep = ":";
+  }
+  const size_t new_size =
+    var_len + strlen(sep) + strlen(ctx->nix_ld_lib_path) + 1;
+  char *new_str = mmap(NULL, new_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 
-    *envp = new_str;
-    return 0;
+  if (new_str == MAP_FAILED) {
+    return -errno;
   }
 
-  log_error(
-      ctx,
-      "BUG could not append to LD_LIBRARY_PATH: LD_LIBRARY_PATH not found");
-  abort();
+  // same as LD_LIBRARY_PATH=oldvalue:$NIX_LD_LIBRARY_PATH
+  snprintf(new_str, new_size, "%s%s%s", env, sep, ctx->nix_ld_lib_path);
+
+  *ctx->ld_lib_path_envp = new_str;
+  return 0;
 }
 
-void fix_auxv(size_t *auxv, size_t load_addr) {
+static void fix_auxv(size_t *auxv, size_t load_addr) {
   // AT_BASE points to us, we need to point it to the new interpreter
   for (; auxv[0]; auxv += 2) {
     size_t key = auxv[0];
@@ -374,11 +386,21 @@ void fix_auxv(size_t *auxv, size_t load_addr) {
   }
 }
 
-int main(int argc, char **argv) {
-  struct ld_ctx ctx = init_ld_ctx(argv);
+int main(int argc, char** argv, char** envp) {
+  size_t *auxv;
+  for (auxv = (size_t *)envp; *auxv; auxv++) {
+  }
+  auxv++;
+
+  struct ld_ctx ctx = init_ld_ctx(argc, argv, envp, auxv);
 
   if (!ctx.nix_ld) {
     log_error(&ctx, "NIX_LD or NIX_LD_" NIX_SYSTEM " is not set");
+    return 1;
+  }
+
+  if (!ctx.page_size) {
+    log_error(&ctx, "no page size (AT_PAGESZ) given by operating system in auxv.");
     return 1;
   }
 
@@ -387,23 +409,17 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  const size_t *stackp = ((size_t *)argv - 1);
-  char **envp = &argv[argc + 1];
-
-  size_t *auxv;
-  for (auxv = (size_t *)envp; *auxv; auxv++) {
-  }
-  auxv++;
-  fix_auxv(auxv, ctx.load_addr);
-
   if (ctx.nix_ld_lib_path) {
     if (ctx.ld_lib_path) {
-      update_ld_library_path(&ctx, envp);
+      update_ld_library_path(&ctx);
     } else {
-      insert_ld_library_path(&ctx, envp);
+      insert_ld_library_path(&ctx);
     }
   }
 
+  fix_auxv(auxv, ctx.load_addr);
+
+  const size_t *stackp = ((size_t *)argv - 1);
   jmp_ld((void (*)(void))ctx.entry_point, (void *)stackp);
 
   return 0;
