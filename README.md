@@ -40,7 +40,7 @@ actual hostname of your system.
 ```nix
 # flake.nix
 {
-  inputs.nixpkgs.url = "github:Mic92/nixpkgs/master";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/master";
   inputs.nix-ld.url = "github:Mic92/nix-ld";
   # this line assume that you also have nixpkgs as an input
   inputs.nix-ld.inputs.nixpkgs.follows = "nixpkgs";
