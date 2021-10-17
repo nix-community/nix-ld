@@ -72,7 +72,7 @@ be done with a `shell.nix` in a nix-shell like this:
     openssl
     # ...
   ];
-  NIX_LD = builtins.readFile "${stdenv.cc}/nix-support/dynamic-linker";
+  NIX_LD = lib.fileContents "${stdenv.cc}/nix-support/dynamic-linker";
 }
 ```
 
