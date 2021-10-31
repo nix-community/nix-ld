@@ -35,7 +35,7 @@ $ sudo nix-channel --update
 ### With nix flake 
 
 Add the following lines to `/etc/nixos/flake.nix`. Replace `myhostname` with the
-actual hostname of your system. 
+actual hostname of your system.
 
 ```nix
 # flake.nix
@@ -77,8 +77,14 @@ be done with a `shell.nix` in a nix-shell like this:
 ```
 
 A full example is shown in `./examples/masterpdfeditor.nix`.
+
 In [nix-autobahn](https://github.com/Lassulus/nix-autobahn) there is also a
 script called `nix-autobahn-ld` that automates generating shell expressions.
+
+In [nix-alien](https://github.com/thiagokokada/nix-alien) there is another
+script called `nix-alien-ld` that uses another strategy, wrapping the program in
+a `writeShellScriptBin` with the `NIX_LD`/`NIX_LD_LIBRARY_PATH` environment
+variables set.
 
 ## Known Issues
 
@@ -94,13 +100,16 @@ its work by changing the entry point in memory to fix this.
 
 ### How to find libraries for my executables?
 
-You can use tools like [nix-autobahn](https://github.com/Lassulus/nix-autobahn) or use [nix-index](https://github.com/bennofs/nix-index)
+You can use tools like [nix-autobahn](https://github.com/Lassulus/nix-autobahn),
+[nix-alien](https://github.com/thiagokokada/nix-alien) or use
+[nix-index](https://github.com/bennofs/nix-index)
 
 ### Why not set LD_LIBRARY_PATH directly instead of NIX_LD_LIBRARY_PATH?
 
-LD_LIBRARY_PATH affects all programs, which can inject the wrong libraries in correct build nix application 
-that have an RPATH set in their executable.
+LD_LIBRARY_PATH affects all programs, which can inject the wrong libraries in
+correct build nix application that have an RPATH set in their executable.
 
 ### Does this work on non-NixOS system?
 
-No. Normal Linux distributions will have their own link-loader. Replacing those with nix-ld will break the system.
+No. Normal Linux distributions will have their own link-loader. Replacing those
+with nix-ld will break the system.
