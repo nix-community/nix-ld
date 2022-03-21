@@ -1,21 +1,51 @@
 # nix-ld
 
-Run unpatched dynamic binaries on NixOS. Precompiled binaries not built for
-NixOS usually have a so called link-loader hard coded.
-For example, on Linux/x86_64 this is `/lib64/ld-linux-x86-64.so.2` for glibc.
-NixOS on the other hand normally has its dynamic linker in the glibc
-package in the nix store and therefore cannot run those binaries.
-Nix-ld provides a shim layer for these kind of binaries. It
-is installed to the same location where other Linux distributions 
-install their link loader i.e. `/lib64/ld-linux-x86-64.so.2` and
-it will then chainload the actual link loader as specified in the environment
-variable `NIX_LD`. Furthermore, it also accepts a comma seperated
-path of library lookup paths in `NIX_LD_LIBRARY_PATH`. This environment
-variable will be rewritten to `LD_LIBRARY_PATH` before passing execution
-to the actual ld. This allows you to specify additional libraries that the
-executable needs for execution.
+Run unpatched dynamic binaries on NixOS.
+
+## Where is this useful?
+
+While many proprietary packages in nixpkgs have already been patched with
+`autoPatchelfHook`` patching, there are cases where patching is not possible:
+
+- Use binary executable downloaded with third-party package managers (e.g. vscode, npm or pip) without having to patch them on every update.
+- Run games or proprietary software that attempts to verify its integrity.
+- Run programs that are too large for the nix store (e.g. FPGA IDEs).
+
+While there are other solutions such as `buildFHSUserEnv` that restore a Linux file
+hierarchy as found on common Linux systems (`ld-linux-x86-64.so.2`), these
+sandboxes have their own weaknesses:
+
+- setuid binaries cannot be executed inside a fhsuserenv
+- inside a buildFHSUserEnv you can not use other sandbox tools like bwrap or 'nix build'.
+- buildFHSUserEnv requires a subshell which does not work well with direnv
+
+## How does nix-ld work?
+
+Precompiled binaries that were not created for NixOS usually have a so-called
+link-loader hardcoded into  them. On Linux/x86_64 this is for example
+`/lib64/ld-linux-x86-64.so.2`.  for glibc. NixOS, on the other hand, usually has
+its dynamic linker in the glibc package in the Nix store and therefore cannot
+run these binaries. Nix-ld provides a shim layer for these types of binaries. It
+is installed in the same location where other Linux distributions install their
+link loader, ie. `/lib64/ld-linux-x86-64.so.2` and then loads the actual link
+loader as specified in the environment variable `NIX_LD`. In addition, it also
+accepts a comma-separated path from library lookup paths in `NIX_LD_LIBRARY_PATH`.
+This environment variable is rewritten to `LD_LIBRARY_PATH` before
+passing execution to the actual ld. This allows you to specify additional
+libraries that the executable needs to run.
 
 ## Installation
+
+nix-ld is now part of nixpkgs and will be available NixOS 22.05. There one can enable it with the following
+nixos setting:
+
+``` nix
+{
+  programs.nix-ld.enable = true;
+}
+```
+
+To install `nix-ld` from the repository instead, use the following method:
 
 ```sh
 $ sudo nix-channel --add https://github.com/Mic92/nix-ld/archive/main.tar.gz nix-ld
@@ -66,7 +96,8 @@ After setting up the nix-ld symlink as described above, one needs to  set
 be done with a `shell.nix` in a nix-shell like this:
 
 ```nix
-{
+with import <nixpkgs> {};
+mkShell {
   NIX_LD_LIBRARY_PATH = lib.makeLibraryPath [
     stdenv.cc.cc
     openssl
@@ -86,15 +117,18 @@ script called `nix-alien-ld` that uses another strategy, wrapping the program in
 a `writeShellScriptBin` with the `NIX_LD`/`NIX_LD_LIBRARY_PATH` environment
 variables set.
 
+To figure out what libraries a program needs, you can use `ldd` on the binary or
+set the `LD_DEBUG=libs` environment variable.
+
 ## Known Issues
 
 ### LD_LIBRARY_PATH is inherited by child processes
 
-nix-ld currently rewrites NIX_LD_LIBRARY_PATH to LD_LIBRARY_PATH. This can
-lead to problems if program loaded with this loader executes a normal binary
-that should not receive those libraries. It might be possible in future
-redirect execution back to nix-ld after the real library loader has performed
-its work by changing the entry point in memory to fix this.
+nix-ld is currently rewrites `NIX_LD_LIBRARY_PATH` to `LD_LIBRARY_PATH`. This
+can cause problems if a program loaded with this loader executes a normal
+binary, which should not get these libraries. In the future, it may be possible
+to redirect execution back to nix-ld after the actual library loader has done
+its job by changing the entry point in memory to fix this.
 
 ## FAQ
 
