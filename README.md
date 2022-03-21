@@ -5,7 +5,7 @@ Run unpatched dynamic binaries on NixOS.
 ## Where is this useful?
 
 While many proprietary packages in nixpkgs have already been patched with
-`autoPatchelfHook`` patching, there are cases where patching is not possible:
+`autoPatchelfHook` patching, there are cases where patching is not possible:
 
 - Use binary executable downloaded with third-party package managers (e.g. vscode, npm or pip) without having to patch them on every update.
 - Run games or proprietary software that attempts to verify its integrity.
@@ -16,8 +16,8 @@ hierarchy as found on common Linux systems (`ld-linux-x86-64.so.2`), these
 sandboxes have their own weaknesses:
 
 - setuid binaries cannot be executed inside a fhsuserenv
-- inside a buildFHSUserEnv you can not use other sandbox tools like bwrap or 'nix build'.
-- buildFHSUserEnv requires a subshell which does not work well with direnv
+- inside a `buildFHSUserEnv` you can not use other sandbox tools like bwrap or 'nix build'.
+- `buildFHSUserEnv` requires a subshell which does not work well with direnv
 
 ## How does nix-ld work?
 
