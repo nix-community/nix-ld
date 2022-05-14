@@ -1,7 +1,5 @@
 {pkgs, ...}: {
-  systemd.tmpfiles.rules = let
-    nix-ld = pkgs.callPackage ../nix-ld.nix {};
-  in [
-    "L+ ${nix-ld.ldPath} - - - - ${nix-ld}/libexec/nix-ld"
+  systemd.tmpfiles.packages = [
+    (pkgs.callPackage ../nix-ld.nix {})
   ];
 }

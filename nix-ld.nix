@@ -7,7 +7,16 @@
   path,
   pkgs,
 }: let
-  self = stdenv.mkDerivation rec {
+  libDir =
+    if
+      stdenv.system
+      == "x86_64-linux"
+      || stdenv.system == "mips64-linux"
+      || stdenv.system == "powerpc64le-linux"
+    then "/lib64"
+    else "/lib";
+in
+  stdenv.mkDerivation rec {
     name = "nix-ld";
     src = ./.;
 
@@ -25,24 +34,25 @@
 
     postInstall = ''
       mkdir -p $out/nix-support
-      basename $(< ${stdenv.cc}/nix-support/dynamic-linker) > $out/nix-support/ld-name
+
+      ldpath=${libDir}/$(basename $(< ${stdenv.cc}/nix-support/dynamic-linker))
+      echo "$ldpath" > $out/nix-support/ldpath
+      mkdir -p $out/lib/tmpfiles.d/
+      cat > $out/lib/tmpfiles.d/nix-ld.conf <<EOF
+        L+ $ldpath - - - - $out/libexec/nix-ld
+      EOF
     '';
 
     passthru.tests = import ./nixos-test.nix {
       makeTest = import (path + "/nixos/tests/make-test-python.nix");
       inherit pkgs;
     };
-    passthru.ldPath = let
-      libDir =
-        if
-          stdenv.system
-          == "x86_64-linux"
-          || stdenv.system == "mips64-linux"
-          || stdenv.system == "powerpc64le-linux"
-        then "/lib64"
-        else "/lib";
-      ldName = lib.fileContents "${self}/nix-support/ld-name";
-    in "${libDir}/${ldName}";
-  };
-in
-  self
+
+    meta = with lib; {
+      description = "Run unpatched dynamic binaries on NixOS";
+      homepage = "https://github.com/Mic92/nix-ld";
+      license = licenses.mit;
+      maintainers = with maintainers; [ mic92 ];
+      platforms = platforms.unix;
+    };
+  }
