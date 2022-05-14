@@ -1,6 +1,5 @@
 {
   lib,
-  system,
   stdenv,
   meson,
   ninja,
@@ -17,7 +16,7 @@
     nativeBuildInputs = [meson ninja];
 
     mesonFlags = [
-      "-Dnix-system=${system}"
+      "-Dnix-system=${stdenv.system}"
     ];
 
     hardeningDisable = [
@@ -36,10 +35,10 @@
     passthru.ldPath = let
       libDir =
         if
-          system
+          stdenv.system
           == "x86_64-linux"
-          || system == "mips64-linux"
-          || system == "powerpc64le-linux"
+          || stdenv.system == "mips64-linux"
+          || stdenv.system == "powerpc64le-linux"
         then "/lib64"
         else "/lib";
       ldName = lib.fileContents "${self}/nix-support/ld-name";
