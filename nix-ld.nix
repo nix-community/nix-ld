@@ -1,12 +1,20 @@
-{ lib, system, stdenv, meson, ninja, overrideCC, path, pkgs }:
-let
+{
+  lib,
+  system,
+  stdenv,
+  meson,
+  ninja,
+  overrideCC,
+  path,
+  pkgs,
+}: let
   self = stdenv.mkDerivation rec {
     name = "nix-ld";
     src = ./.;
 
     doCheck = true;
 
-    nativeBuildInputs = [ meson ninja ];
+    nativeBuildInputs = [meson ninja];
 
     mesonFlags = [
       "-Dnix-system=${system}"
@@ -26,14 +34,16 @@ let
       inherit pkgs;
     };
     passthru.ldPath = let
-      libDir = if system == "x86_64-linux" ||
-                  system == "mips64-linux" ||
-                  system == "powerpc64le-linux"
-               then
-                 "/lib64"
-               else
-                 "/lib";
+      libDir =
+        if
+          system
+          == "x86_64-linux"
+          || system == "mips64-linux"
+          || system == "powerpc64le-linux"
+        then "/lib64"
+        else "/lib";
       ldName = lib.fileContents "${self}/nix-support/ld-name";
     in "${libDir}/${ldName}";
   };
-in self
+in
+  self

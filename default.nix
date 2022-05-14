@@ -1,2 +1,2 @@
-{ pkgs ? import <nixpkgs> {} }:
+{pkgs ? import <nixpkgs> {}}:
 pkgs.callPackage ./nix-ld.nix {}
