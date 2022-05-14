@@ -14,5 +14,6 @@
   in {
     packages.nix-ld = pkgs.callPackage ./default.nix {};
     defaultPackage = self.packages.${system}.nix-ld;
+    checks = self.packages.${system}.nix-ld.tests;
   });
 }
