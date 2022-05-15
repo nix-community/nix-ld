@@ -7,14 +7,9 @@
   path,
   pkgs,
 }: let
-  libDir =
-    if
-      stdenv.system
-      == "x86_64-linux"
-      || stdenv.system == "mips64-linux"
-      || stdenv.system == "powerpc64le-linux"
-    then "/lib64"
-    else "/lib";
+  libDir = if builtins.elem stdenv.system [ "x86_64-linux" "mips64-linux" "powerpc64le-linux" ]
+           then "/lib64"
+           else "/lib";
 in
   stdenv.mkDerivation rec {
     name = "nix-ld";
