@@ -395,7 +395,7 @@ int main(int argc, char** argv, char** envp) {
   struct ld_ctx ctx = init_ld_ctx(argc, argv, envp, auxv);
 
   if (!ctx.nix_ld) {
-    log_error(&ctx, "NIX_LD or NIX_LD_" NIX_SYSTEM " is not set");
+    log_error(&ctx, "You are trying to run an unpatched binary on nixos, but you have not configured NIX_LD or NIX_LD_" NIX_SYSTEM ". See https://github.com/Mic92/nix-ld for more details");
     return 1;
   }
 
