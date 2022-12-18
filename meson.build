@@ -42,7 +42,7 @@ configure_file(input : 'config.h.in',
 
 ptr_size = cc.sizeof('void *')
 
-vendor_inc = include_directories('vendor/nolibc', 'src/stdint', 'vendor/printf')
+vendor_inc = include_directories('vendor/nolibc')
 
 nix_ld = executable('nix-ld',
                     ['src/nix-ld.c'],
