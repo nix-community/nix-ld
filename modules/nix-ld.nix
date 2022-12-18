@@ -42,7 +42,9 @@ in
       default = baseLibraries;
     };
   };
-  config = lib.mkIf cfg.enable {
+  config = {
+    programs.nix-ld.enable = true;
+
     systemd.tmpfiles.packages = [
       (pkgs.callPackage ../nix-ld.nix {})
     ];
