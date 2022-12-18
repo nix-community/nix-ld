@@ -5,8 +5,7 @@
 #include <nolibc.h>
 
 #include "strerror.h"
-#include "mmap.h"
-#include <printf.c>
+#include <stdio.h>
 #include <config.h>
 
 #define alloca __builtin_alloca
@@ -55,17 +54,12 @@ static inline void munmapp(mmap_t *m) {
   }
 }
 
-void _putchar(char c) {
-  // super slow but we only use print stuff in the error case, so it does not matter.
-  write(1, &c, 1);
-}
-
 static void log_error(struct ld_ctx *ctx, const char *format, ...) {
   va_list args;
   printf("cannot execute %s: ", ctx->prog_name);
 
   va_start(args, format);
-  vprintf(format, args);
+  vfprintf(stdout, format, args);
   va_end(args);
 
   // cannot overflow because vsnprintf leaves space for the null byte
@@ -368,7 +362,9 @@ static int update_ld_library_path(struct ld_ctx *ctx) {
   }
 
   // same as LD_LIBRARY_PATH=oldvalue:$NIX_LD_LIBRARY_PATH
-  snprintf(new_str, new_size, "%s%s%s", env, sep, ctx->nix_ld_lib_path);
+  strlcpy(new_str, env, new_size);
+  strlcat(new_str, sep, new_size);
+  strlcat(new_str, ctx->nix_ld_lib_path, new_size);
 
   *ctx->ld_lib_path_envp = new_str;
   return 0;
