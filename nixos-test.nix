@@ -8,7 +8,7 @@
       nodes.machine = import ./nixos-example.nix;
       testScript = ''
         start_all()
-        machine.succeed(f"hello")
+        machine.succeed("hello")
       '';
     } {
       inherit pkgs;
