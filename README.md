@@ -21,6 +21,9 @@ sandboxes have their own weaknesses:
 
 ## How does nix-ld work?
 
+Also read this [blog post](https://blog.thalheim.io/2022/12/31/nix-ld-a-clean-solution-for-issues-with-pre-compiled-executives-on-nixos/)
+to get the explaination in full detail. A summary is below:
+
 Precompiled binaries that were not created for NixOS usually have a so-called
 link-loader hardcoded into  them. On Linux/x86_64 this is for example
 `/lib64/ld-linux-x86-64.so.2`.  for glibc. NixOS, on the other hand, usually has
