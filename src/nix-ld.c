@@ -56,14 +56,14 @@ static inline void munmapp(mmap_t *m) {
 
 static void log_error(struct ld_ctx *ctx, const char *format, ...) {
   va_list args;
-  printf("cannot execute %s: ", ctx->prog_name);
+  fprintf(stderr, "cannot execute %s: ", ctx->prog_name);
 
   va_start(args, format);
-  vfprintf(stdout, format, args);
+  vfprintf(stderr, format, args);
   va_end(args);
 
   // cannot overflow because vsnprintf leaves space for the null byte
-  printf("\n");
+  fprintf(stderr, "\n");
 }
 
 static char *get_env(char* env, const char* key) {
