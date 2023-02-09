@@ -1,0 +1,7 @@
+cut_body_after = "" # don't include text from the PR body in the merge commit message
+status = [
+  "Evaluate flake.nix",
+  "check smoketest [x86_64-linux]",
+  "package default [x86_64-linux]",
+  "package nix-ld [x86_64-linux]"
+]
