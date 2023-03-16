@@ -370,16 +370,16 @@ static int update_ld_library_path(struct ld_ctx *ctx) {
   return 0;
 }
 
-static void fix_auxv(size_t *auxv, size_t load_addr) {
+static void* get_at_base(size_t *auxv) {
   // AT_BASE points to us, we need to point it to the new interpreter
   for (; auxv[0]; auxv += 2) {
     size_t key = auxv[0];
     size_t *value = &auxv[1];
     if (key == AT_BASE) {
-      *value = load_addr;
-      break;
+      return value;
     }
   }
+  return NULL;
 }
 
 int main(int argc, char** argv, char** envp) {
@@ -413,7 +413,15 @@ int main(int argc, char** argv, char** envp) {
     }
   }
 
-  fix_auxv(auxv, ctx.load_addr);
+  size_t *at_base = get_at_base(auxv);
+  if (at_base) {
+    if (*at_base == 0) {
+      // We have been executed as a dynamic executable, so we need to execute
+      // the interpreter as a dynamic executable.
+      execve(ctx.nix_ld, argv, envp);
+    }
+    *at_base = ctx.load_addr;
+  }
 
   const size_t *stackp = ((size_t *)argv - 1);
   jmp_ld((void (*)(void))ctx.entry_point, (void *)stackp);
