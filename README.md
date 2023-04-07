@@ -39,7 +39,7 @@ libraries that the executable needs to run.
 
 ## Installation
 
-nix-ld is now part of nixpkgs and will be available starting with NixOS 22.05. There one can enable it with the following
+nix-ld is part of nixpkgs since NixOS 22.05. There one can enable it with the following
 nixos setting:
 
 ``` nix
