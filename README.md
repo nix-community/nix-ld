@@ -110,7 +110,7 @@ mkShell {
 }
 ```
 
-A full example is shown in `./examples/masterpdfeditor.nix`.
+A full example is shown in [`./examples/masterpdfeditor.nix`](examples/masterpdfeditor.nix).
 
 In [nix-autobahn](https://github.com/Lassulus/nix-autobahn) there is also a
 script called `nix-autobahn-ld` that automates generating shell expressions.
