@@ -202,7 +202,9 @@ static int elf_map(struct ld_ctx *ctx, int fd, const Phdr *prog_headers,
       size_t brk = ctx->load_addr + ph->p_vaddr + ph->p_filesz;
       size_t pgbrk = page_align(ctx, brk);
       size_t this_max = page_align(ctx, ph->p_vaddr + ph->p_memsz);
-      memset((void *)brk, 0, page_offset(ctx, pgbrk - brk));
+      if (page_offset(ctx, pgbrk - brk)) {
+        memset((void *)brk, 0, page_offset(ctx, pgbrk - brk));
+      }
 
       if (pgbrk - ctx->load_addr < this_max) {
         void *res = mmap((void *)pgbrk, ctx->load_addr + this_max - pgbrk, prot,
