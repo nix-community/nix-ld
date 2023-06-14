@@ -27,6 +27,9 @@ typedef Elf64_Phdr Phdr;
 #error unsupported word width
 #endif
 
+#define DEFAULT_NIX_LD "/run/current-system/sw/share/nix-ld/lib/ld.so"
+#define DEFAULT_NIX_LD_LIBRARY_PATH "/run/current-system/sw/share/nix-ld/lib"
+
 typedef struct {
   void *addr;
   size_t size;
@@ -382,6 +385,11 @@ static void* get_at_base(size_t *auxv) {
   return NULL;
 }
 
+#define R_OK 4
+int access(const char *pathname, int mode) {
+  return my_syscall2(__NR_access, (long)pathname, mode);
+}
+
 int main(int argc, char** argv, char** envp) {
   size_t *auxv;
   for (auxv = (size_t *)envp; *auxv; auxv++) {
@@ -391,8 +399,15 @@ int main(int argc, char** argv, char** envp) {
   struct ld_ctx ctx = init_ld_ctx(argc, argv, envp, auxv);
 
   if (!ctx.nix_ld) {
-    log_error(&ctx, "You are trying to run an unpatched binary on nixos, but you have not configured NIX_LD or NIX_LD_" NIX_SYSTEM ". See https://github.com/Mic92/nix-ld for more details");
-    return 1;
+    // fallback to default ld.so
+    if (access(DEFAULT_NIX_LD, R_OK) == 0) {
+      ctx.nix_ld = DEFAULT_NIX_LD;
+      // if no NIX_LD is set we also don't trust NIX_LD_LIBRARY_PATH since it may point to a different libc
+      ctx.nix_lib_path_prefix = DEFAULT_NIX_LD_LIBRARY_PATH;
+    } else {
+      log_error(&ctx, "You are trying to run an unpatched binary on nixos, but you have not configured NIX_LD or NIX_LD_" NIX_SYSTEM ". See https://github.com/Mic92/nix-ld for more details");
+      return 1;
+    }
   }
 
   if (!ctx.page_size) {
