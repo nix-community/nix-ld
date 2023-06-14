@@ -405,7 +405,7 @@ int main(int argc, char** argv, char** envp) {
     if (access(DEFAULT_NIX_LD, R_OK) == 0) {
       ctx.nix_ld = DEFAULT_NIX_LD;
       // if no NIX_LD is set we also don't trust NIX_LD_LIBRARY_PATH since it may point to a different libc
-      ctx.nix_lib_path_prefix = DEFAULT_NIX_LD_LIBRARY_PATH;
+      ctx.nix_ld_lib_path = DEFAULT_NIX_LD_LIBRARY_PATH;
     } else {
       log_error(&ctx, "You are trying to run an unpatched binary on nixos, but you have not configured NIX_LD or NIX_LD_" NIX_SYSTEM ". See https://github.com/Mic92/nix-ld for more details");
       return 1;
