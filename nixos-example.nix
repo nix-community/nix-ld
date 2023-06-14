@@ -1,6 +1,6 @@
 {pkgs, ...}: {
   imports = [./modules/nix-ld.nix];
-  programs.nix-ld.enable = true;
+  programs.nix-ld.dev.enable = true;
   environment.systemPackages = [
     (pkgs.runCommand "patched-hello" {} ''
       install -D -m755 ${pkgs.hello}/bin/hello $out/bin/hello

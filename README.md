@@ -25,8 +25,8 @@ Also read this [blog post](https://blog.thalheim.io/2022/12/31/nix-ld-a-clean-so
 to get the explaination in full detail. A summary is below:
 
 Precompiled binaries that were not created for NixOS usually have a so-called
-link-loader hardcoded into  them. On Linux/x86_64 this is for example
-`/lib64/ld-linux-x86-64.so.2`.  for glibc. NixOS, on the other hand, usually has
+link-loader hardcoded into them. On Linux/x86_64 this is for example
+`/lib64/ld-linux-x86-64.so.2`. for glibc. NixOS, on the other hand, usually has
 its dynamic linker in the glibc package in the Nix store and therefore cannot
 run these binaries. Nix-ld provides a shim layer for these types of binaries. It
 is installed in the same location where other Linux distributions install their
@@ -42,7 +42,7 @@ libraries that the executable needs to run.
 nix-ld is part of nixpkgs since NixOS 22.05. There one can enable it with the following
 nixos setting:
 
-``` nix
+```nix
 {
   programs.nix-ld.enable = true;
 }
@@ -62,10 +62,14 @@ $ sudo nix-channel --update
   imports = [
     <nix-ld/modules/nix-ld.nix>
   ];
+  # The module in this repository defines a new module under (programs.nix-ld.dev) instead of (programs.nix-ld) 
+  # to not collide with the nixpkgs version.
+  programs.nix-ld.dev.enable = true;
 }
 ```
 
-### With nix flake 
+
+### With nix flake
 
 Add the following lines to `/etc/nixos/flake.nix`. Replace `myhostname` with the
 actual hostname of your system.
@@ -77,7 +81,7 @@ actual hostname of your system.
   inputs.nix-ld.url = "github:Mic92/nix-ld";
   # this line assume that you also have nixpkgs as an input
   inputs.nix-ld.inputs.nixpkgs.follows = "nixpkgs";
-  
+
   outputs = { nix-ld, nixpkgs, ... }: {
     # replace `myhostname` with your actual hostname
     nixosConfigurations.myhostname = nixpkgs.lib.nixosSystem {
@@ -85,16 +89,19 @@ actual hostname of your system.
       modules = [
         # ... add this line to the rest of your configuration modules
         nix-ld.nixosModules.nix-ld
+
+        # The module in this repository defines a new module under (programs.nix-ld.dev) instead of (programs.nix-ld) 
+        # to not collide with the nixpkgs version.
+        { programs.nix-ld.dev.enable = true; }
       ];
     };
   };
 }
 ```
 
-
 ## Usage
 
-After setting up the nix-ld symlink as described above, one needs to  set
+After setting up the nix-ld symlink as described above, one needs to set
 `NIX_LD` and `NIX_LD_LIBRARY_PATH` to run executables. For example, this can
 be done with a `shell.nix` in a nix-shell like this:
 
@@ -122,6 +129,21 @@ variables set.
 
 To figure out what libraries a program needs, you can use `ldd` on the binary or
 set the `LD_DEBUG=libs` environment variable.
+
+## Default Configuration for nix-ld
+
+In some scenarios, certain build systems or programs might ignore environment variables,
+which could disrupt the functioning of nix-ld.
+
+To counteract this, nix-ld implements a fallback mechanism. 
+If the `NIX_LD` environment variable is not set, 
+nix-ld will verify the existence of `/run/current-system/sw/share/nix-ld/lib/ld.so`. 
+If this file exists, it will be used, alongside `/run/current-system/sw/share/nix-ld/lib`.
+
+This behavior essentially defaults back to the NixOS configuration for nix-ld. 
+In terms of library paths, it will default to using the paths specified in `programs.nix-ld.libraries`. 
+This ensures that nix-ld can function effectively, even when its configuration 
+is not explicitly defined through the `NIX_LD` environment variable.
 
 ## Known Issues
 
@@ -154,14 +176,14 @@ with nix-ld will break the system.
 ### My python/nodejs/ruby/$interpreter libraries do not find the libraries configured by nix-ld
 
 Nix-ld is only used by unpatched executables that use the link loader at `/lib`
-or `/lib64`.  If you use for example python from nixpkgs than it will not pick
-up `NIX_LD_LIBRARY_PATH` and `NIX_LD`  since these types of binaries are
+or `/lib64`. If you use for example python from nixpkgs than it will not pick
+up `NIX_LD_LIBRARY_PATH` and `NIX_LD` since these types of binaries are
 configured to use a glibc from the nix store. If you encounter these cases i.e.
 when you are trying to use python packages installed in a virtualenv than you
 need to set `LD_LIBRARY_PATH` directly. You can also create yourself a wrapper
 like this:
 
-``` nix
+```nix
 (pkgs.writeShellScriptBin "python" ''
   export LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH
   exec ${pkgs.python3}/bin/python "$@"

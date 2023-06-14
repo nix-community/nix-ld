@@ -11,8 +11,11 @@ in {
       testScript = ''
         start_all()
         machine.succeed("hello")
+        machine.succeed("ls -la /run/current-system/sw/share/nix-ld/lib/ld.so >&2")
         machine.succeed("$(< ${nix-ld}/nix-support/ldpath) --version")
-        machine.succeed("$(< ${nix-ld}/nix-support/ldpath) $(which hello)")
+
+        # test fallback if NIX_LD is not set
+        machine.succeed("unset NIX_LD; unset NIX_LD_LIBRARY_PATH; $(< ${nix-ld}/nix-support/ldpath) $(which hello)")
       '';
     } {
       inherit pkgs;
