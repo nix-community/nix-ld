@@ -4,9 +4,11 @@
 
 #include <nolibc.h>
 
-#include "strerror.h"
 #include <stdio.h>
 #include <config.h>
+
+#include "strerror.h"
+#include "access.h"
 
 #define alloca __builtin_alloca
 
@@ -387,10 +389,6 @@ static void* get_at_base(size_t *auxv) {
   return NULL;
 }
 
-#define R_OK 4
-int access(const char *pathname, int mode) {
-  return my_syscall2(__NR_access, (long)pathname, mode);
-}
 
 int main(int argc, char** argv, char** envp) {
   size_t *auxv;
