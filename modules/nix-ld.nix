@@ -8,7 +8,7 @@ let
     paths = map lib.getLib cfg.libraries;
     # TODO make glibc here configurable?
     postBuild = ''
-      ln -s "$(cat '${pkgs.stdenv.cc}/nix-support/dynamic-linker')" $out/share/nix-ld/lib/ld.so
+      ln -s ${pkgs.stdenv.cc.bintools.dynamicLinker} $out/share/nix-ld/lib/ld.so
     '';
     extraPrefix = "/share/nix-ld";
     ignoreCollisions = true;

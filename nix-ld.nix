@@ -3,7 +3,6 @@
   stdenv,
   meson,
   ninja,
-  overrideCC,
   path,
   pkgs,
 }: let
@@ -11,7 +10,7 @@
            then "/lib64"
            else "/lib";
 in
-  stdenv.mkDerivation rec {
+  stdenv.mkDerivation {
     name = "nix-ld";
     src = ./.;
 
@@ -30,7 +29,7 @@ in
     postInstall = ''
       mkdir -p $out/nix-support
 
-      ldpath=${libDir}/$(basename $(< ${stdenv.cc}/nix-support/dynamic-linker))
+      ldpath=${libDir}/$(basename ${pkgs.stdenv.cc.bintools.dynamicLinker})
       echo "$ldpath" > $out/nix-support/ldpath
       mkdir -p $out/lib/tmpfiles.d/
       cat > $out/lib/tmpfiles.d/nix-ld.conf <<EOF
