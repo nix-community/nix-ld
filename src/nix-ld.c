@@ -399,15 +399,18 @@ int main(int argc, char** argv, char** envp) {
   struct ld_ctx ctx = init_ld_ctx(argc, argv, envp, auxv);
 
   if (!ctx.nix_ld) {
-    // fallback to default ld.so
-    if (access(DEFAULT_NIX_LD, R_OK) == 0) {
-      ctx.nix_ld = DEFAULT_NIX_LD;
-      // if no NIX_LD is set we also don't trust NIX_LD_LIBRARY_PATH since it may point to a different libc
-      ctx.nix_lib_path_prefix = DEFAULT_NIX_LD_LIBRARY_PATH;
-    } else {
-      log_error(&ctx, "You are trying to run an unpatched binary on nixos, but you have not configured NIX_LD or NIX_LD_" NIX_SYSTEM ". See https://github.com/Mic92/nix-ld for more details");
-      return 1;
-    }
+    // FIXME: fallback to default ld.so
+    // This requires however to also increase envp to have space for the new environment variable
+    //if (access(DEFAULT_NIX_LD, R_OK) == 0) {
+    //  ctx.nix_ld = DEFAULT_NIX_LD;
+    //  // if no NIX_LD is set we also don't trust NIX_LD_LIBRARY_PATH since it may point to a different libc
+    //  ctx.nix_lib_path_prefix = DEFAULT_NIX_LD_LIBRARY_PATH;
+    //} else {
+    //  log_error(&ctx, "You are trying to run an unpatched binary on nixos, but you have not configured NIX_LD or NIX_LD_" NIX_SYSTEM ". See https://github.com/Mic92/nix-ld for more details");
+    //  return 1;
+    //}
+    log_error(&ctx, "You are trying to run an unpatched binary on nixos, but you have not configured NIX_LD or NIX_LD_" NIX_SYSTEM ". See https://github.com/Mic92/nix-ld for more details");
+    return 1;
   }
 
   if (!ctx.page_size) {

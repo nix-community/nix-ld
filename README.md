@@ -130,6 +130,7 @@ variables set.
 To figure out what libraries a program needs, you can use `ldd` on the binary or
 set the `LD_DEBUG=libs` environment variable.
 
+<!--
 ## Default Configuration for nix-ld
 
 In some scenarios, certain build systems or programs might ignore environment variables,
@@ -144,6 +145,7 @@ This behavior essentially defaults back to the NixOS configuration for nix-ld.
 In terms of library paths, it will default to using the paths specified in `programs.nix-ld.libraries`. 
 This ensures that nix-ld can function effectively, even when its configuration 
 is not explicitly defined through the `NIX_LD` environment variable.
+-->
 
 ## Known Issues
 
