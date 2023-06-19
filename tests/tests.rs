@@ -57,7 +57,7 @@ fn test_dt_needed(libtest: &str, dt_needed_bin: &Path) {
 /// Check that we can run a binary that does dlopen.
 #[rstest]
 fn test_dlopen(libtest: &str) {
-    let bin = compile_test_bin("dlopen", &["test"]);
+    let bin = compile_test_bin("dlopen", &[]);
     eprintln!("test_dlopen: {}", libtest);
 
     // First make sure it doesn't run without the library
@@ -65,7 +65,7 @@ fn test_dlopen(libtest: &str) {
         remove_var("LD_LIBRARY_PATH");
         remove_var("NIX_LD_LIBRARY_PATH");
         let (_, stderr) = must_fail(&bin);
-        assert!(stderr.contains("loading shared"));
+        assert!(stderr.contains("Failed to dlopen libtest.so"));
     }
 
     // Now it should work
@@ -112,8 +112,7 @@ const EXE: &str = env!("CARGO_BIN_EXE_nix-ld-rs");
 const TARGET: &str = env!("NIX_LD_TEST_TARGET");
 
 lazy_static! {
-    static ref TMPDIR: TempDir =
-        { tempfile::tempdir().expect("Failed to create temporary directory") };
+    static ref TMPDIR: TempDir = tempfile::tempdir().expect("Failed to create temporary directory");
 }
 
 fn find_cc() -> String {
