@@ -19,7 +19,10 @@ use core::ptr;
 
 use constcat::concat_slices;
 
-use arch::{NIX_LD_SYSTEM_ENV, NIX_LD_SYSTEM_ENV_BYTES, NIX_LD_LIBRARY_PATH_SYSTEM_ENV, NIX_LD_LIBRARY_PATH_SYSTEM_ENV_BYTES};
+use arch::{
+    NIX_LD_LIBRARY_PATH_SYSTEM_ENV, NIX_LD_LIBRARY_PATH_SYSTEM_ENV_BYTES, NIX_LD_SYSTEM_ENV,
+    NIX_LD_SYSTEM_ENV_BYTES,
+};
 use args::{Args, EnvEdit, VarHandle};
 use default_env::default_env;
 use support::StackSpace;
@@ -36,7 +39,9 @@ const DEFAULT_NIX_LD: &CStr = unsafe {
 
 const DEFAULT_NIX_LD_LIBRARY_PATH: &[u8] = b"/run/current-system/sw/share/nix-ld/lib";
 const DEFAULT_NIX_LD_LIBRARY_PATH_ENV: &CStr = unsafe {
-    CStr::from_bytes_with_nul_unchecked(concat_slices!([u8]: b"NIX_LD_LIBRARY_PATH=", DEFAULT_NIX_LD_LIBRARY_PATH, b"\0"))
+    CStr::from_bytes_with_nul_unchecked(
+        concat_slices!([u8]: b"NIX_LD_LIBRARY_PATH=", DEFAULT_NIX_LD_LIBRARY_PATH, b"\0"),
+    )
 };
 
 #[derive(Default)]
@@ -149,13 +154,15 @@ extern "C" fn real_main() -> ! {
     } else {
         log::info!("Neither LD_LIBRARY_PATH or NIX_LD_LIBRARY_PATH exist - Setting default");
 
-        let new_env = args.add_env(
-            "LD_LIBRARY_PATH",
-            DEFAULT_NIX_LD_LIBRARY_PATH.len(),
-            |buf| {
-                buf.copy_from_slice(DEFAULT_NIX_LD_LIBRARY_PATH);
-            },
-        ).unwrap();
+        let new_env = args
+            .add_env(
+                "LD_LIBRARY_PATH",
+                DEFAULT_NIX_LD_LIBRARY_PATH.len(),
+                |buf| {
+                    buf.copy_from_slice(DEFAULT_NIX_LD_LIBRARY_PATH);
+                },
+            )
+            .unwrap();
 
         EnvEdit {
             entry: ptr::null(),
@@ -175,14 +182,13 @@ extern "C" fn real_main() -> ! {
     let loader = elf::ElfHandle::open(nix_ld, pagesz).unwrap();
     let loader_map = loader.map().unwrap();
 
-    let mut at_base = args.auxv_mut().at_base.as_mut()
-        .and_then(|base| {
-            if base.value().is_null() {
-                None
-            } else {
-                Some(base)
-            }
-        });
+    let mut at_base = args.auxv_mut().at_base.as_mut().and_then(|base| {
+        if base.value().is_null() {
+            None
+        } else {
+            Some(base)
+        }
+    });
 
     match at_base {
         None => {
@@ -196,11 +202,7 @@ extern "C" fn real_main() -> ! {
 
             args.handoff(|start| unsafe {
                 log::debug!("Start context: {:#?}", start);
-                nolibc::execve(
-                    nix_ld.as_ptr(),
-                    start.argv,
-                    start.envp,
-                );
+                nolibc::execve(nix_ld.as_ptr(), start.argv, start.envp);
                 nolibc::abort();
             });
         }

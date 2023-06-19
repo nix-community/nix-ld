@@ -250,11 +250,7 @@ impl<'args> Iterator for EnvIter<'args> {
         let env = unsafe { core::ffi::CStr::from_ptr(pptr.cast()) };
         if let Some((name, value_c)) = env.parse_env() {
             self.index += 1;
-            Some(VarHandle {
-                ptr,
-                name,
-                value_c,
-            })
+            Some(VarHandle { ptr, name, value_c })
         } else {
             // Bad environment
             self.ended = true;
@@ -304,7 +300,12 @@ impl VarHandle {
         new_buf[whole_len] = 0;
         f(self.value(), &mut new_buf[name_len + 1..whole_len]);
 
-        log::debug!("Edited env entry {:?} ({:?} -> {:?})", self.ptr, old_buf, new_buf.as_ptr());
+        log::debug!(
+            "Edited env entry {:?} ({:?} -> {:?})",
+            self.ptr,
+            old_buf,
+            new_buf.as_ptr()
+        );
 
         EnvEdit {
             entry: self.ptr,
@@ -326,7 +327,7 @@ impl VarHandle {
 }
 
 impl<'a> StackShifter<'a> {
-    fn new(arg_slice: &'a mut [usize], orig_idx: usize,) -> Self {
+    fn new(arg_slice: &'a mut [usize], orig_idx: usize) -> Self {
         Self {
             arg_slice,
             orig_idx,
@@ -378,9 +379,9 @@ impl<'a> StackShifter<'a> {
     fn finalize(self) -> StartContext {
         let idx_argv = self.idx_argv.expect("Must have argv");
         let idx_envp = self.idx_envp.expect("Must have envp");
-        let extra_env = self.idx_extra_env.map(|idx| {
-            (&self.arg_slice[idx] as *const usize).cast()
-        });
+        let extra_env = self
+            .idx_extra_env
+            .map(|idx| (&self.arg_slice[idx] as *const usize).cast());
 
         StartContext {
             sp: self.arg_slice.as_ptr().cast(),

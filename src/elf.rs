@@ -5,12 +5,12 @@ use core::fmt;
 use core::mem;
 use core::ptr;
 
+use crate::arch::elf_jmp;
 pub use crate::arch::elf_types;
 use crate::arch::elf_types::{
     header::{Header, ET_DYN},
     program_header::{ProgramHeader, PF_R, PF_W, PF_X, PT_LOAD},
 };
-use crate::arch::elf_jmp;
 use crate::auxv::AuxVec;
 use crate::nolibc::{
     self, ENOENT, MAP_ANONYMOUS, MAP_FAILED, MAP_FIXED, MAP_PRIVATE, O_RDONLY, PROT_EXEC,
@@ -173,7 +173,10 @@ impl ElfHandle {
         log::debug!("  Entry Point: 0x{:x?}", entry_point);
         log::debug!("    Page Size: {}", self.page_size);
 
-        log::debug!("GDB: add-symbol-file /path/to/ld.so.symbols 0x{:x}", load_bias);
+        log::debug!(
+            "GDB: add-symbol-file /path/to/ld.so.symbols 0x{:x}",
+            load_bias
+        );
 
         for ph in self.phs.iter() {
             if ph.p_type != PT_LOAD || ph.p_memsz == 0 {
@@ -373,11 +376,9 @@ impl ProgramHeaders {
             }
         }
 
-        first_vaddr.map(|first_vaddr| {
-            LoadableSummary {
-                first_vaddr,
-                total_mapping_size: addr_max - addr_min,
-            }
+        first_vaddr.map(|first_vaddr| LoadableSummary {
+            first_vaddr,
+            total_mapping_size: addr_max - addr_min,
         })
     }
 }

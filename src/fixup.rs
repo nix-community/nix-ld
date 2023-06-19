@@ -10,7 +10,7 @@ use crate::arch::R_RELATIVE;
 use crate::auxv::AuxVec;
 use crate::elf::{
     elf_types,
-    elf_types::dynamic::{DT_NULL, DT_REL, DT_RELENT, DT_RELSZ, DT_RELA, DT_RELAENT, DT_RELASZ},
+    elf_types::dynamic::{DT_NULL, DT_REL, DT_RELA, DT_RELAENT, DT_RELASZ, DT_RELENT, DT_RELSZ},
     elf_types::header::Header,
     elf_types::program_header::PT_DYNAMIC,
     ProgramHeaders,
@@ -28,16 +28,11 @@ struct Dynamic {
 
 impl Dynamic {
     fn from_program_headers(phs: &ProgramHeaders, load_offset: usize) -> Option<Self> {
-        phs.iter()
-            .find(|ph| ph.p_type == PT_DYNAMIC)
-            .map(|ph| {
-                let ptr =
-                    load_offset.wrapping_add(ph.p_vaddr as usize) as *const elf_types::dynamic::Dyn;
-                Self {
-                    ptr,
-                    load_offset,
-                }
-            })
+        phs.iter().find(|ph| ph.p_type == PT_DYNAMIC).map(|ph| {
+            let ptr =
+                load_offset.wrapping_add(ph.p_vaddr as usize) as *const elf_types::dynamic::Dyn;
+            Self { ptr, load_offset }
+        })
     }
 
     fn fixup(&self) {
@@ -58,9 +53,8 @@ impl Dynamic {
 
                 // DT_RELA
                 DT_RELA => {
-                    rela_data =
-                        Some(entry.d_val.wrapping_add(self.load_offset as _)
-                            as *const elf_types::reloc::Rela);
+                    rela_data = Some(entry.d_val.wrapping_add(self.load_offset as _)
+                        as *const elf_types::reloc::Rela);
                 }
                 DT_RELASZ => {
                     rela_len =
@@ -75,13 +69,11 @@ impl Dynamic {
 
                 // DT_REL
                 DT_REL => {
-                    rel_data =
-                        Some(entry.d_val.wrapping_add(self.load_offset as _)
-                            as *const elf_types::reloc::Rel);
+                    rel_data = Some(entry.d_val.wrapping_add(self.load_offset as _)
+                        as *const elf_types::reloc::Rel);
                 }
                 DT_RELSZ => {
-                    rel_len =
-                        Some(entry.d_val as usize / mem::size_of::<elf_types::reloc::Rel>());
+                    rel_len = Some(entry.d_val as usize / mem::size_of::<elf_types::reloc::Rel>());
                 }
                 DT_RELENT => {
                     let actual_size = entry.d_val as usize;
@@ -136,10 +128,8 @@ pub unsafe fn fixup_relocs(envp: *const *const u8) {
     let auxv = AuxVec::from_raw(auxv);
 
     let load_offset = {
-        let at_base = auxv.at_base.as_ref()
-            .map_or_else(ptr::null, |v| v.value());
-        let at_phdr = auxv.at_phdr.as_ref()
-            .map_or_else(ptr::null, |v| v.value());
+        let at_base = auxv.at_base.as_ref().map_or_else(ptr::null, |v| v.value());
+        let at_phdr = auxv.at_phdr.as_ref().map_or_else(ptr::null, |v| v.value());
         let exec_start = __executable_start as *const usize;
 
         if !at_base.is_null() {

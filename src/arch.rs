@@ -1,7 +1,7 @@
 //! Arch-specific stuff.
 
-use core::ptr;
 use core::ffi::c_void;
+use core::ptr;
 
 use constcat::concat;
 

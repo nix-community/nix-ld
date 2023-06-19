@@ -1,4 +1,4 @@
-use std::env::{self, set_var, remove_var};
+use std::env::{self, remove_var, set_var};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -112,9 +112,8 @@ const EXE: &str = env!("CARGO_BIN_EXE_nix-ld-rs");
 const TARGET: &str = env!("NIX_LD_TEST_TARGET");
 
 lazy_static! {
-    static ref TMPDIR: TempDir = {
-        tempfile::tempdir().expect("Failed to create temporary directory")
-    };
+    static ref TMPDIR: TempDir =
+        { tempfile::tempdir().expect("Failed to create temporary directory") };
 }
 
 fn find_cc() -> String {
@@ -159,7 +158,8 @@ fn compile_test_bin(name: &str, libs: &[&str]) -> PathBuf {
         .arg(&out_path)
         .arg(out_dir_arg)
         .arg(dynamic_linker_arg)
-        .arg("-L").arg(TMPDIR.path())
+        .arg("-L")
+        .arg(TMPDIR.path())
         .args(libs.iter().map(|l| format!("-l{}", l)))
         .arg(source_path)
         .status()
@@ -186,18 +186,24 @@ fn run(bin: impl AsRef<Path>, want_success: bool) -> (String, String) {
         .output()
         .expect("Failed to spawn test binary");
 
-    let stdout = String::from_utf8(output.stdout)
-        .expect("stdout contains non-UTF-8");
-    let stderr = String::from_utf8(output.stderr)
-        .expect("stderr contains non-UTF-8");
+    let stdout = String::from_utf8(output.stdout).expect("stdout contains non-UTF-8");
+    let stderr = String::from_utf8(output.stderr).expect("stderr contains non-UTF-8");
 
     print!("{}", stdout);
     eprint!("{}", stderr);
 
     if want_success {
-        assert!(output.status.success(), "{:?} did not run successfully", bin.file_name().unwrap());
+        assert!(
+            output.status.success(),
+            "{:?} did not run successfully",
+            bin.file_name().unwrap()
+        );
     } else {
-        assert!(!output.status.success(), "{:?} unexpectedly succeeded", bin.file_name().unwrap());
+        assert!(
+            !output.status.success(),
+            "{:?} unexpectedly succeeded",
+            bin.file_name().unwrap()
+        );
     }
 
     (stdout, stderr)
