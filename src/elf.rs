@@ -1,19 +1,15 @@
 //! ELF wrangling.
 
-use core::arch::asm;
 use core::ffi::{c_void, CStr};
+use core::fmt;
 use core::mem;
 use core::ptr;
 
-#[cfg(target_pointer_width = "64")]
-pub use goblin::elf64 as elf_types;
-
-#[cfg(target_pointer_width = "32")]
-pub use goblin::elf32 as elf_types;
-
-use elf_types::header::{Header, ET_DYN};
-use elf_types::program_header::{ProgramHeader, PF_R, PF_W, PF_X, PT_LOAD};
-
+pub use crate::arch::elf_types;
+use crate::arch::elf_types::{
+    header::{Header, ET_DYN},
+    program_header::{ProgramHeader, PF_R, PF_W, PF_X, PT_LOAD},
+};
 use crate::arch::elf_jmp;
 use crate::auxv::AuxVec;
 use crate::nolibc::{
@@ -46,6 +42,8 @@ pub struct ProgramHeadersIter<'ph> {
     index: usize,
 }
 
+struct DisplayPFlags<'ph>(&'ph ProgramHeader);
+
 struct LoadableSummary {
     total_mapping_size: usize,
     first_vaddr: usize,
@@ -61,7 +59,7 @@ impl ElfHandle {
 
         if fd < 0 && nolibc::errno() == ENOENT {
             let path_bytes = path.to_bytes();
-            if path_bytes.ends_with(&['\n' as u8]) {
+            if path_bytes.ends_with(&[b'\n']) {
                 // ${stdenv.cc}/nix-support/dynamic-linker contains trailing newline
                 fd = nolibc::alloc_temp(path_bytes.len(), |path_trunc| {
                     path_trunc.copy_from_slice(path_bytes);
@@ -115,7 +113,7 @@ impl ElfHandle {
             unsafe { nolibc::mmap(ptr::null_mut(), eh_map_len, PROT_READ, MAP_PRIVATE, fd, 0) };
 
         if eh_map == MAP_FAILED {
-            log::error!("Couldn't map {:?} ({})", path, nolibc::errno());
+            log::error!("Couldn't map headers of {:?} ({})", path, nolibc::errno());
             return Err(());
         }
 
@@ -145,9 +143,6 @@ impl ElfHandle {
             return Err(());
         };
 
-        log::debug!("Total mapping: {}", summary.total_mapping_size);
-        log::debug!("Page size: {}", self.page_size);
-
         // For now, we assume the loader is relocatable and let
         // the kernel decide the load addr.
         let load_addr = unsafe {
@@ -170,9 +165,15 @@ impl ElfHandle {
         //     load_addr + page_offset(ph.p_vaddr)
         let load_bias = (load_addr as usize).wrapping_sub(self.page_start(summary.first_vaddr));
         let entry_point = (load_bias + self.entry_point_v) as *const c_void;
-        log::debug!("First vaddr: 0x{:x?}", summary.first_vaddr);
-        log::debug!("  Load bias: 0x{:x?}", load_bias);
-        log::debug!("Entry point: 0x{:x?}", entry_point);
+
+        log::debug!("   Total Size: 0x{:x}", summary.total_mapping_size);
+        log::debug!("    Load Addr: {:x?}", load_addr);
+        log::debug!("  First Vaddr: 0x{:x?}", summary.first_vaddr);
+        log::debug!("    Load Bias: 0x{:x?}", load_bias);
+        log::debug!("  Entry Point: 0x{:x?}", entry_point);
+        log::debug!("    Page Size: {}", self.page_size);
+
+        log::debug!("GDB: add-symbol-file /path/to/ld.so.symbols 0x{:x}", load_bias);
 
         for ph in self.phs.iter() {
             if ph.p_type != PT_LOAD || ph.p_memsz == 0 {
@@ -198,11 +199,18 @@ impl ElfHandle {
             //
             // We do the following mmap for the file-backed portion:
             let mapping = unsafe {
-                let addr = self.page_start(load_bias + vaddr) as *mut c_void;
+                let addr = self.page_start(load_bias + vaddr);
                 let offset = self.page_start(offset);
                 let size = file_map_size;
+
+                log::trace!(
+                    "mmap [{ph}] [0x{addr:x}-0x{mend:x}] (vaddr=0x{vaddr:x}, offset=0x{offset:x})",
+                    mend = addr + size,
+                    ph = DisplayPFlags(ph),
+                );
+
                 nolibc::mmap(
-                    addr,
+                    addr as *mut c_void,
                     size,
                     prot,
                     MAP_PRIVATE | MAP_FIXED,
@@ -247,14 +255,6 @@ impl ElfHandle {
                     nolibc::memset(zero_addr, 0, zero_size);
                 }
             }
-
-            log::trace!(
-                "Mapped: 0x{:x} -> [{:?} + 0x{:x} ~ 0x{:x}]",
-                vaddr,
-                mapping,
-                self.page_offset(vaddr),
-                mapping as usize + memsz
-            );
         }
 
         Ok(ElfMapping {
@@ -272,11 +272,6 @@ impl ElfHandle {
     fn page_start(&self, v: usize) -> usize {
         v & !(self.page_size - 1)
     }
-
-    #[inline(always)]
-    fn page_offset(&self, v: usize) -> usize {
-        v & (self.page_size - 1)
-    }
 }
 
 impl Drop for ElfHandle {
@@ -293,7 +288,7 @@ impl ElfMapping {
     }
 
     /// Jumps to the entry point with a stack.
-    pub unsafe fn jmp(self, sp: *const c_void) -> ! {
+    pub unsafe fn jump_with_sp(self, sp: *const c_void) -> ! {
         elf_jmp!(sp, self.entry_point);
     }
 }
@@ -378,17 +373,16 @@ impl ProgramHeaders {
             }
         }
 
-        if let Some(first_vaddr) = first_vaddr {
-            Some(LoadableSummary {
+        first_vaddr.map(|first_vaddr| {
+            LoadableSummary {
                 first_vaddr,
                 total_mapping_size: addr_max - addr_min,
-            })
-        } else {
-            None
-        }
+            }
+        })
     }
 }
 
+// TODO: Just make a slice out of them, no need for impl Iterator
 impl<'ph> Iterator for ProgramHeadersIter<'ph> {
     type Item = &'ph ProgramHeader;
 
@@ -414,5 +408,22 @@ impl ProgramHeaderExt for ProgramHeader {
         (if p_flags & PF_R != 0 { PROT_READ } else { 0 })
             | (if p_flags & PF_W != 0 { PROT_WRITE } else { 0 })
             | (if p_flags & PF_X != 0 { PROT_EXEC } else { 0 })
+    }
+}
+
+impl<'ph> fmt::Display for DisplayPFlags<'ph> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let p_flags = &self.0.p_flags;
+        let mut write_prot = |mask, s| {
+            if p_flags & mask != 0 {
+                write!(f, "{}", s)
+            } else {
+                write!(f, " ")
+            }
+        };
+        write_prot(PF_R, "R")?;
+        write_prot(PF_W, "W")?;
+        write_prot(PF_X, "X")?;
+        Ok(())
     }
 }

@@ -18,7 +18,7 @@
 
   outputs = { self, nixpkgs, flake-utils, rust-overlay, ... }: let
     # System types to support.
-    supportedSystems = [ "x86_64-linux" "aarch64-linux" ];
+    supportedSystems = [ "i686-linux" "x86_64-linux" "aarch64-linux" ];
   in flake-utils.lib.eachSystem supportedSystems (system: let
     pkgs = import nixpkgs {
       inherit system;
@@ -39,15 +39,17 @@
     };
     devShell = pkgs.mkShell {
       nativeBuildInputs = with pkgs; [
-        #rustc cargo
         rustDev
         cargo-bloat
+        cargo-nextest
       ];
 
       hardeningDisable = [ "stackprotector" ];
 
-      RUSTC_BOOTSTRAP = "1"; # required by compiler-builtins
-      RUSTFLAGS = "-C relocation-model=pie -Z plt=yes";
+      # For convenience in devShell
+      DEFAULT_NIX_LD = pkgs.stdenv.cc.bintools.dynamicLinker;
+
+      RUSTC_BOOTSTRAP = "1";
     };
   });
 }

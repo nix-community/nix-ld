@@ -1,7 +1,6 @@
 //! Low-level support.
 
 use core::fmt::{self, Write};
-use core::panic::PanicInfo;
 
 use crate::arch::STACK_ALIGNMENT;
 use crate::nolibc;
@@ -29,7 +28,7 @@ impl log::Log for StderrLogger {
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
             let mut fd = Fd(2);
-            write!(fd, "[nix-ld] {}: {}\n", record.level(), record.args()).unwrap();
+            writeln!(fd, "[nix-ld] {:>5}: {}", record.level(), record.args()).unwrap();
         }
     }
 
@@ -47,21 +46,11 @@ impl StackSpace {
     }
 }
 
-#[panic_handler]
-fn panic_handler(info: &PanicInfo) -> ! {
-    let mut stderr = Fd(2);
-    write!(stderr, "[nix-ld] FATAL: {}\n", info).unwrap();
-
-    unsafe {
-        nolibc::abort();
-    }
-}
-
-#[no_mangle]
-extern "C" fn __stack_chk_fail() -> ! {
-    explode("stack smashing detected");
-}
-
+/// Aborts the program because something went terribly wrong.
+///
+/// Unlike panic!(), this doesn't trigger the panic-handling
+/// or formatting machinery.
+#[cold]
 pub fn explode(s: &str) -> ! {
     let prefix = "[nix-ld] FATAL: ";
 
@@ -71,4 +60,20 @@ pub fn explode(s: &str) -> ! {
         nolibc::write(2, "\n".as_ptr(), 1);
         nolibc::abort();
     }
+}
+
+#[cfg(not(test))]
+#[panic_handler]
+fn panic_handler(info: &core::panic::PanicInfo) -> ! {
+    let mut stderr = Fd(2);
+    writeln!(stderr, "[nix-ld] FATAL: {}", info).unwrap();
+
+    unsafe {
+        nolibc::abort();
+    }
+}
+
+#[no_mangle]
+extern "C" fn __stack_chk_fail() -> ! {
+    explode("stack smashing detected");
 }

@@ -11,12 +11,14 @@ pub const AT_PHENT: usize = 4;
 pub const AT_PHNUM: usize = 5;
 pub const AT_PAGESZ: usize = 6;
 pub const AT_BASE: usize = 7;
+pub const AT_ENTRY: usize = 9;
 
 #[derive(Debug, Default)]
 pub struct AuxVec {
     ptr: Option<*const usize>,
     auxvc: Option<usize>,
     pub at_base: Option<Entry<*const c_void>>,
+    pub at_entry: Option<Entry<*const c_void>>,
     pub at_phdr: Option<Entry<*const ProgramHeader>>,
     pub at_phent: Option<Entry>,
     pub at_phnum: Option<Entry>,
@@ -47,6 +49,7 @@ impl AuxVec {
         };
 
         let mut at_base = None;
+        let mut at_entry = None;
         let mut at_phdr = None;
         let mut at_phent = None;
         let mut at_phnum = None;
@@ -56,6 +59,7 @@ impl AuxVec {
         for entry in auxv.iter() {
             match entry.key() {
                 AT_BASE => at_base = Some(entry.steal()),
+                AT_ENTRY => at_entry = Some(entry.steal()),
                 AT_PHDR => at_phdr = Some(entry.steal()),
                 AT_PHENT => at_phent = Some(entry.steal()),
                 AT_PHNUM => at_phnum = Some(entry.steal()),
@@ -66,6 +70,7 @@ impl AuxVec {
         }
 
         auxv.at_base = at_base;
+        auxv.at_entry = at_entry;
         auxv.at_phdr = at_phdr;
         auxv.at_phent = at_phent;
         auxv.at_phnum = at_phnum;
@@ -75,11 +80,11 @@ impl AuxVec {
     }
 
     pub fn as_ptr(&self) -> Option<*const usize> {
-        self.ptr.clone()
+        self.ptr
     }
 
     pub fn count(&self) -> Option<usize> {
-        self.auxvc.clone()
+        self.auxvc
     }
 
     pub fn iter(&self) -> AuxVecIter {

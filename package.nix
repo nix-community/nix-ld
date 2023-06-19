@@ -17,14 +17,17 @@ rustPlatform.buildRustPackage {
 
   hardeningDisable = [ "stackprotector" ];
 
-  RUSTC_BOOTSTRAP = "1"; # required by compiler-builtins
-  RUSTFLAGS = "-C relocation-model=pie -Z plt=yes";
+  NIX_SYSTEM = stdenv.system;
+  RUSTC_BOOTSTRAP = "1";
 
-  doCheck = false;
+  preCheck = ''
+    export NIX_LD=${stdenv.cc.bintools.dynamicLinker}
+  '';
 
   postInstall = ''
     mkdir -p $out/libexec
-    ln -s $out/bin/nix-ld-rs $out/libexec/
+    ln -s $out/bin/nix-ld-rs $out/libexec/nix-ld-rs
+    ln -s $out/bin/nix-ld-rs $out/libexec/nix-ld
 
     mkdir -p $out/nix-support
 

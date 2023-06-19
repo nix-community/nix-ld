@@ -3,19 +3,41 @@ name = "nix-ld-rs"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "nix-ld-rs"
+test = false
+
+[[test]]
+name = "tests"
+
 [dependencies]
 cfg-match = "0.2.1"
-compiler_builtins = { version = "0.1.93", features = ["mem"] }
+constcat = "0.3.0"
+default-env = "0.1.1"
 goblin = { version = "0.7.1", default-features = false, features = ["elf32", "elf64"] }
 heapless = "0.7.16"
 log = "0.4.19"
+#compiler_builtins = { version = "0.1.93", features = ["mem"] }
 
 [build-dependencies]
 cc = "1.0.79"
+
+[dev-dependencies]
+cc = "1.0.79"
+lazy_static = "1.4.0"
+rstest = "0.17.0"
+tempfile = "3.6.0"
 
 [profile.dev]
 panic = "abort"
 
 [profile.release]
 panic = "abort"
-opt-level = 3
+lto = true
+debug = true
+
+[features]
+default = ["entry_trampoline"]
+
+# Use a trampoline to revert our changes to LD_LIBRARY_PATH before executing the real program
+entry_trampoline = []

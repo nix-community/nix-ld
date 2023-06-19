@@ -1,8 +1,9 @@
-#![feature(core_intrinsics)]
+#![feature(naked_functions)]
+#![feature(asm_const)]
 #![no_std]
 #![no_main]
 
-extern crate compiler_builtins;
+//extern crate compiler_builtins;
 
 mod arch;
 mod args;
@@ -12,21 +13,31 @@ mod fixup;
 mod nolibc;
 mod support;
 
-use core::arch::asm;
 use core::ffi::{c_void, CStr};
 use core::mem::MaybeUninit;
+use core::ptr;
 
-use arch::NIX_LD_SYSTEM_ENV;
-use args::{Args, VarHandle};
+use constcat::concat_slices;
+
+use arch::{NIX_LD_SYSTEM_ENV, NIX_LD_SYSTEM_ENV_BYTES, NIX_LD_LIBRARY_PATH_SYSTEM_ENV, NIX_LD_LIBRARY_PATH_SYSTEM_ENV_BYTES};
+use args::{Args, EnvEdit, VarHandle};
+use default_env::default_env;
 use support::StackSpace;
 
 static mut ARGS: MaybeUninit<Args> = MaybeUninit::uninit();
 static mut STACK: MaybeUninit<StackSpace> = MaybeUninit::uninit();
 
 const DEFAULT_NIX_LD: &CStr = unsafe {
-    CStr::from_bytes_with_nul_unchecked(b"/run/current-system/sw/share/nix-ld/lib/ld.so\0")
+    CStr::from_bytes_with_nul_unchecked(concat_slices!([u8]:
+        default_env!("DEFAULT_NIX_LD", "/run/current-system/sw/share/nix-ld/lib/ld.so").as_bytes(),
+        b"\0"
+    ))
 };
+
 const DEFAULT_NIX_LD_LIBRARY_PATH: &[u8] = b"/run/current-system/sw/share/nix-ld/lib";
+const DEFAULT_NIX_LD_LIBRARY_PATH_ENV: &CStr = unsafe {
+    CStr::from_bytes_with_nul_unchecked(concat_slices!([u8]: b"NIX_LD_LIBRARY_PATH=", DEFAULT_NIX_LD_LIBRARY_PATH, b"\0"))
+};
 
 #[derive(Default)]
 struct Context {
@@ -36,11 +47,11 @@ struct Context {
 }
 
 #[no_mangle]
-extern "C" fn main(argc: isize, argv: *const *const u8, envp: *const *const u8) -> ! {
+extern "C" fn main(argc: usize, argv: *const *const u8, envp: *const *const u8) -> ! {
     unsafe {
-        let args = ARGS.write(Args::new(argc, argv, envp));
-        fixup::fixup_relocs(args.auxv());
+        fixup::fixup_relocs(envp);
 
+        ARGS.write(Args::new(argc, argv, envp));
         let stack = STACK.assume_init_mut().bottom();
         arch::main_relocate_stack!(stack, real_main);
     }
@@ -66,10 +77,10 @@ extern "C" fn real_main() -> ! {
                     }
                 }
             }
-            b"NIX_LD" | NIX_LD_SYSTEM_ENV => {
+            b"NIX_LD" | NIX_LD_SYSTEM_ENV_BYTES => {
                 ctx.nix_ld = Some(env);
             }
-            b"NIX_LD_LIBRARY_PATH" => {
+            b"NIX_LD_LIBRARY_PATH" | NIX_LD_LIBRARY_PATH_SYSTEM_ENV_BYTES => {
                 ctx.nix_ld_library_path = Some(env);
             }
             b"LD_LIBRARY_PATH" => {
@@ -79,15 +90,33 @@ extern "C" fn real_main() -> ! {
         }
     }
 
-    let pagesz = args
-        .auxv()
-        .at_pagesz
-        .as_ref()
-        .expect("AT_PAGESZ must exist")
-        .value();
+    // Deal with NIX_LD
+    let nix_ld = match &mut ctx.nix_ld {
+        None => {
+            // Not set at all, let's add it
+            log::info!("NIX_LD is not set - Falling back to default");
+            DEFAULT_NIX_LD
+        }
+        Some(nix_ld) if nix_ld.value().is_empty() => {
+            log::info!("NIX_LD is empty - Falling back to default");
+            let default_bytes = DEFAULT_NIX_LD.to_bytes();
+            ctx.nix_ld
+                .take()
+                .unwrap()
+                .edit(None, default_bytes.len(), |_, buf| {
+                    buf.copy_from_slice(default_bytes);
+                });
+            DEFAULT_NIX_LD
+        }
+        Some(nix_ld) => {
+            let cstr = nix_ld.value_cstr();
+            log::info!("NIX_LD is set to {:?}", cstr);
+            cstr
+        }
+    };
 
     // Deal with {NIX_,}LD_LIBRARY_PATH
-    if let Some(ld_library_path) = ctx.ld_library_path {
+    let env_edit = if let Some(ld_library_path) = ctx.ld_library_path {
         // Concatenate:
         //
         // Basically LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$NIX_LD_LIBRARY_PATH
@@ -100,86 +129,115 @@ extern "C" fn real_main() -> ! {
             DEFAULT_NIX_LD_LIBRARY_PATH
         };
 
-        let sep: &[u8] = if head.is_empty() || *head.last().unwrap() == ':' as u8 {
+        let sep: &[u8] = if head.is_empty() || *head.last().unwrap() == b':' {
             &[]
         } else {
-            &[':' as u8]
+            &[b':']
         };
         let new_len = head.len() + tail.len() + sep.len();
 
-        ld_library_path.edit(new_len, |head, new| {
+        ld_library_path.edit(None, new_len, |head, new| {
             new[..head.len()].copy_from_slice(head);
             new[head.len()..head.len() + sep.len()].copy_from_slice(sep);
             new[head.len() + sep.len()..].copy_from_slice(tail);
-        });
+        })
     } else if let Some(nix_ld_library_path) = ctx.nix_ld_library_path.take() {
         log::info!("Renaming NIX_LD_LIBRARY_PATH to LD_LIBRARY_PATH");
-        nix_ld_library_path.rename("LD_LIBRARY_PATH");
+
+        // NIX_LD_LIBRARY_PATH must always exist for impure child processes to work
+        nix_ld_library_path.rename("LD_LIBRARY_PATH")
     } else {
         log::info!("Neither LD_LIBRARY_PATH or NIX_LD_LIBRARY_PATH exist - Setting default");
-        args.add_env(
+
+        let new_env = args.add_env(
             "LD_LIBRARY_PATH",
             DEFAULT_NIX_LD_LIBRARY_PATH.len(),
             |buf| {
                 buf.copy_from_slice(DEFAULT_NIX_LD_LIBRARY_PATH);
             },
-        );
-    }
+        ).unwrap();
 
-    // Deal with NIX_LD
-    let default_bytes = DEFAULT_NIX_LD.to_bytes();
-    let nix_ld = match &mut ctx.nix_ld {
-        None => {
-            // Not set at all, let's add it
-            log::info!("NIX_LD is not set - Falling back to default");
-            args.add_env("NIX_LD", default_bytes.len(), |buf| {
-                buf.copy_from_slice(default_bytes);
-            });
-            DEFAULT_NIX_LD
-        }
-        Some(nix_ld) if nix_ld.value().is_empty() => {
-            log::info!("NIX_LD is empty - Falling back to default");
-            ctx.nix_ld
-                .take()
-                .unwrap()
-                .edit(default_bytes.len(), |_, buf| {
-                    buf.copy_from_slice(default_bytes);
-                });
-            DEFAULT_NIX_LD
-        }
-        Some(nix_ld) => {
-            let cstr = nix_ld.value_cstr();
-            log::info!("NIX_LD is set to {:?}", cstr);
-            cstr
+        EnvEdit {
+            entry: ptr::null(),
+            old_env: DEFAULT_NIX_LD_LIBRARY_PATH_ENV.as_ptr().cast(),
+            new_env,
         }
     };
 
-    log::debug!("Going to open loader {:?}", nix_ld);
+    let pagesz = args
+        .auxv()
+        .at_pagesz
+        .as_ref()
+        .expect("AT_PAGESZ must exist")
+        .value();
+
+    log::info!("Loading {:?}", nix_ld);
     let loader = elf::ElfHandle::open(nix_ld, pagesz).unwrap();
     let loader_map = loader.map().unwrap();
 
-    if let Some(ref mut at_base) = args.auxv_mut().at_base {
-        if at_base.value().is_null() {
-            // We were executed directly - execve the actual loader
-            log::warn!("We were executed directly - execve-ing");
-            log::warn!("Hi there, thanks for testing! However, executing nix-ld directly isn't how it's normally used and much of the core functionality isn't exercised this way.");
-            log::warn!("Instead, try patchelf-ing any executable to use nix-ld-rs as the interperter.");
+    let mut at_base = args.auxv_mut().at_base.as_mut()
+        .and_then(|base| {
+            if base.value().is_null() {
+                None
+            } else {
+                Some(base)
+            }
+        });
 
-            args.handoff(|stack| unsafe {
+    match at_base {
+        None => {
+            // We were executed directly - execve the actual loader
+            if args.argc() <= 1 {
+                log::warn!("Environment honored by nix-ld:");
+                log::warn!("- NIX_LD, {}", NIX_LD_SYSTEM_ENV);
+                log::warn!("- NIX_LD_LIBRARY_PATH, {}", NIX_LD_LIBRARY_PATH_SYSTEM_ENV);
+                log::warn!("- NIX_LD_LOG (error, warn, info, debug, trace)");
+            }
+
+            args.handoff(|start| unsafe {
+                log::debug!("Start context: {:#?}", start);
                 nolibc::execve(
                     nix_ld.as_ptr(),
-                    stack.argv,
-                    stack.envp,
+                    start.argv,
+                    start.envp,
                 );
                 nolibc::abort();
             });
-        } else {
+        }
+        Some(ref mut at_base) => {
             // We are the loader - Set the AT_BASE to the actual loader
             at_base.set(loader_map.load_bias() as *const c_void);
         }
     }
 
-    args.handoff(|stack| unsafe {
-        loader_map.jmp(stack.sp);
+    // We want our LD_LIBRARY_PATH to only affect the loaded binary
+    // and not propagate to child processes. To achieve this, we
+    // replace the entry point with a trampoline that reverts our
+    // LD_LIBRARY_PATH edit and jumps to the real entry point.
+    if let Some(trampoline) = arch::ENTRY_TRAMPOLINE {
+        log::info!("Using entry trampoline");
+        if let Some(ref mut at_entry) = args.auxv_mut().at_entry {
+            unsafe {
+                arch::TRAMPOLINE_CONTEXT.entry(at_entry.value());
+                arch::TRAMPOLINE_CONTEXT.revert_env(&env_edit);
+            }
+            at_entry.set(trampoline as *const _);
+        } else {
+            log::warn!("No AT_ENTRY found");
+        }
+    }
+
+    args.handoff(|start| unsafe {
+        log::debug!("Start context: {:#?}", start);
+
+        if arch::ENTRY_TRAMPOLINE.is_some() {
+            if let Some(extra_env) = start.extra_env {
+                arch::TRAMPOLINE_CONTEXT.revert_env_entry(extra_env);
+            }
+            log::debug!("Trampoline context: {:#?}", arch::TRAMPOLINE_CONTEXT);
+        }
+
+        log::info!("Transferring control to ld.so");
+        loader_map.jump_with_sp(start.sp);
     });
 }

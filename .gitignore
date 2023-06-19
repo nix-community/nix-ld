@@ -4,6 +4,7 @@
 result*
 
 *.o
+*.so
 *.out
 
 *~

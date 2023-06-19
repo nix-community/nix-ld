@@ -2,14 +2,12 @@
 
 use core::ffi::{c_void, CStr};
 use core::mem;
-use core::ptr;
 use core::slice;
-
-use heapless::Vec as ArrayVec;
 
 use crate::arch::STACK_ALIGNMENT;
 use crate::auxv::AuxVec;
 use crate::nolibc::new_slice_leak;
+use crate::support::explode;
 
 trait CStrExt {
     fn parse_env(&self) -> Option<(&[u8], &[u8])>;
@@ -19,7 +17,7 @@ pub struct Args {
     /// Whether we have already iterated the envp.
     env_iterated: bool,
 
-    argc: isize,
+    argc: usize,
     argv: *const *const u8,
     envp: *const *const u8,
     auxv: AuxVec,
@@ -27,7 +25,7 @@ pub struct Args {
     // The number of original environment variables.
     envc: usize,
 
-    new_environment: ArrayVec<&'static [u8], 10>,
+    extra_env: Option<*const u8>,
 }
 
 pub struct EnvIter<'args> {
@@ -47,23 +45,31 @@ pub struct VarHandle {
     ptr: *const *const u8,
     name: &'static [u8],
     value_c: &'static [u8],
-
-    /// Length of the buffer, including the final NUL.
-    buf_len: usize,
 }
 
-pub struct WiggledStack {
+/// The context to call _start with.
+#[derive(Debug)]
+pub struct StartContext {
     pub sp: *const c_void,
     pub argv: *const *const u8,
     pub envp: *const *const u8,
+    pub extra_env: Option<*const *const u8>,
 }
 
-struct Wiggler<'a> {
+#[repr(C)]
+pub struct EnvEdit {
+    pub entry: *const *const u8,
+    pub old_env: *const u8,
+    pub new_env: *const u8,
+}
+
+struct StackShifter<'a> {
     arg_slice: &'a mut [usize],
     orig_idx: usize,
     idx: usize,
     idx_argv: Option<usize>,
     idx_envp: Option<usize>,
+    idx_extra_env: Option<usize>,
 }
 
 impl CStrExt for CStr {
@@ -79,7 +85,7 @@ impl CStrExt for CStr {
 }
 
 impl Args {
-    pub unsafe fn new(argc: isize, argv: *const *const u8, envp: *const *const u8) -> Self {
+    pub unsafe fn new(argc: usize, argv: *const *const u8, envp: *const *const u8) -> Self {
         let (envc, auxv) = count_env(envp);
 
         Self {
@@ -89,7 +95,7 @@ impl Args {
             envp,
             envc,
             auxv: AuxVec::from_raw(auxv),
-            new_environment: ArrayVec::new(),
+            extra_env: None,
         }
     }
 
@@ -100,23 +106,18 @@ impl Args {
         &mut self.auxv
     }
 
+    pub fn argc(&self) -> usize {
+        self.argc
+    }
+
     /// Perform a handoff to the actual ld.so.
     ///
     /// The function must not return.
     pub fn handoff<F>(&self, f: F) -> !
     where
-        F: FnOnce(WiggledStack),
+        F: FnOnce(StartContext),
     {
-        if self.new_environment.is_empty() {
-            // No need to mess with the stack
-            log::info!("No new environment variables added - Not wiggling the stack");
-            let sp = unsafe { self.argv.sub(1) };
-            f(WiggledStack {
-                sp: sp.cast(),
-                argv: self.argv,
-                envp: self.envp,
-            });
-        } else {
+        if let Some(extra_env) = self.extra_env {
             // Wiggle the stack to add the new environment
             //
             // <https://fasterthanli.me/content/series/making-our-own-executable-packer/part-12/assets/elf-stack.43b0caae88ae7ef5.svg>
@@ -124,11 +125,13 @@ impl Args {
             // Since we are operating on an entirely separate stack, we can
             // simply treat the old stack as a slice of usizes and shift
             // stuff around in it with `copy_within`.
-            log::info!("Wiggling the stack to accomodate new environment variables");
+            //
+            // TODO: Too overengineered - Simplify
+            log::info!("Shifting the stack to accomodate new environment variable");
 
             let auxvc = self.auxv.count().unwrap();
-            let apparent_len = 1 + self.argc as usize + 1 + self.envc + 1 + auxvc * 2 + 2;
-            let additional_len = self.new_environment.len();
+            let apparent_len = 1 + self.argc + 1 + self.envc + 1 + auxvc * 2 + 2;
+            let additional_len = 1;
             let desired_len = apparent_len + additional_len;
 
             // Does the stack actually look like what we expect?
@@ -159,51 +162,60 @@ impl Args {
                 bytes as usize / mem::size_of::<*const usize>()
             };
 
+            let arg_slice = unsafe {
+                slice::from_raw_parts_mut(new_start_of_storage, desired_len + padding_len)
+            };
+            let mut shifter = StackShifter::new(arg_slice, additional_len + padding_len);
+
             // We want it to look like this:
             //
             // [argc][argv][0][envp][newenv][0][auxv][last entry][padding]
-            let mut wiggler = Wiggler {
-                arg_slice: unsafe {
-                    slice::from_raw_parts_mut(new_start_of_storage, desired_len + padding_len)
-                },
-                orig_idx: additional_len + padding_len,
-                idx: 0,
-                idx_argv: None,
-                idx_envp: None,
-            };
+            shifter.copy(1); // [argc]
+            shifter.mark_argv();
+            shifter.copy(self.argc + 1); // [argv][0]
+            shifter.mark_envp();
+            shifter.copy(self.envc); // [envp]
+            shifter.mark_extra_env();
+            shifter.push(extra_env as usize);
+            shifter.copy(1 + auxvc * 2 + 2); // [0][auxv][last entry]
 
-            wiggler.copy(1); // [argc]
-            wiggler.mark_argv();
-            wiggler.copy(self.argc as usize + 1); // [argv][0]
-            wiggler.mark_envp();
-            wiggler.copy(self.envc); // [envp]
-            for env in self.new_environment.iter() {
-                wiggler.push(env.as_ptr() as usize);
-            }
-            wiggler.copy(1 + auxvc * 2 + 2); // [0][auxv][last entry]
-
-            f(wiggler.finalize());
+            f(shifter.finalize());
+        } else {
+            // No need to mess with the stack
+            log::info!("No new environment variable added - Not shifting the stack");
+            let sp = unsafe { self.argv.sub(1) };
+            f(StartContext {
+                sp: sp.cast(),
+                argv: self.argv,
+                envp: self.envp,
+                extra_env: None,
+            });
         }
 
         // Nothing might work at this point
-        loop {}
+        explode("The handoff function returned");
     }
 
     /// Creates a new environment variable.
-    pub fn add_env<F>(&mut self, name: &str, value_len: usize, f: F)
+    pub fn add_env<F>(&mut self, name: &str, value_len: usize, f: F) -> Result<*const u8, ()>
     where
         F: FnOnce(&mut [u8]),
     {
+        if self.extra_env.is_some() {
+            return Err(());
+        }
+
         let name_len = name.len();
         let whole_len = name_len + 1 + value_len;
         let new_buf = new_slice_leak(whole_len + 1).unwrap();
         new_buf[..name_len].copy_from_slice(name.as_bytes());
-        new_buf[name_len] = '=' as u8;
+        new_buf[name_len] = b'=';
         new_buf[whole_len] = 0;
 
         f(&mut new_buf[name_len + 1..whole_len]);
 
-        self.new_environment.push(new_buf).unwrap();
+        self.extra_env = Some(new_buf.as_ptr());
+        Ok(new_buf.as_ptr())
     }
 
     pub fn iter_env(&mut self) -> Option<EnvIter> {
@@ -230,20 +242,18 @@ impl<'args> Iterator for EnvIter<'args> {
 
         let ptr = unsafe { self.args.envp.add(self.index) };
         let pptr = unsafe { *ptr };
-        if pptr == ptr::null() {
+        if pptr.is_null() {
             self.ended = true;
             return None;
         }
 
         let env = unsafe { core::ffi::CStr::from_ptr(pptr.cast()) };
-        let buf_len = env.to_bytes_with_nul().len();
         if let Some((name, value_c)) = env.parse_env() {
             self.index += 1;
             Some(VarHandle {
                 ptr,
                 name,
                 value_c,
-                buf_len,
             })
         } else {
             // Bad environment
@@ -270,63 +280,63 @@ impl VarHandle {
     }
 
     /// Rename the variable without changing its value.
-    pub fn rename(mut self, new_name: &str) {
-        if new_name.len() <= self.name.len() {
-            // use existing buffer
-            let old_name_len = self.name.len();
-            let new_name_len = new_name.len();
-            let buf = self.get_buf_mut();
-            buf[..new_name_len].copy_from_slice(new_name.as_bytes());
-            buf.copy_within(old_name_len.., new_name_len);
-        } else {
-            // use new buffer
-            let value_len = self.value().len();
-            let new_name_len = new_name.len();
-            let whole_len = new_name_len + 1 + value_len;
-            let new_buf = self.replace_buf(whole_len);
-            new_buf[..new_name_len].copy_from_slice(new_name.as_bytes());
-            new_buf[new_name_len] = '=' as u8;
-            new_buf[new_name_len + 1..whole_len].copy_from_slice(self.value());
-            new_buf[whole_len] = 0;
-        }
+    pub fn rename(self, new_name: &str) -> EnvEdit {
+        let value_len = self.value().len();
+        self.edit(Some(new_name), value_len, |old, new| {
+            new.copy_from_slice(old);
+        })
     }
 
     /// Edits the value.
     ///
     /// The function will take the original value and must fill the
     /// entire new buffer.
-    pub fn edit<F>(mut self, new_len: usize, f: F)
+    pub fn edit<F>(mut self, name: Option<&str>, value_len: usize, f: F) -> EnvEdit
     where
         F: FnOnce(&[u8], &mut [u8]),
     {
-        let name_len = self.name.len();
-        let whole_len = name_len + 1 + new_len;
-        let new_buf = self.replace_buf(whole_len);
-        new_buf[..name_len].copy_from_slice(self.name);
-        new_buf[name_len] = '=' as u8;
+        let name = name.map(|s| s.as_bytes()).unwrap_or(self.name);
+        let name_len = name.len();
+        let whole_len = name_len + 1 + value_len;
+        let (old_buf, new_buf) = self.replace_buf(whole_len);
+        new_buf[..name_len].copy_from_slice(name);
+        new_buf[name_len] = b'=';
         new_buf[whole_len] = 0;
-        f(self.value(), &mut new_buf[self.name.len() + 1..whole_len]);
+        f(self.value(), &mut new_buf[name_len + 1..whole_len]);
+
+        log::debug!("Edited env entry {:?} ({:?} -> {:?})", self.ptr, old_buf, new_buf.as_ptr());
+
+        EnvEdit {
+            entry: self.ptr,
+            old_env: old_buf,
+            new_env: new_buf.as_ptr(),
+        }
     }
 
-    fn get_buf_mut(self) -> &'static mut [u8] {
-        // Safety: Existing view of the environent is consumed
-        let pptr = unsafe { (*self.ptr).cast_mut() };
-        unsafe { slice::from_raw_parts_mut(pptr, self.buf_len) }
-    }
-
-    fn replace_buf(&mut self, new_len: usize) -> &'static mut [u8] {
+    fn replace_buf(&mut self, new_len: usize) -> (*const u8, &'static mut [u8]) {
         // Safety: Existing view of the environent is not affected
         let new_buf = new_slice_leak(new_len + 1).unwrap();
         let mptr = self.ptr.cast_mut();
         unsafe {
+            let old_buf = *mptr;
             *mptr = new_buf.as_ptr();
+            (old_buf, new_buf)
         }
-
-        new_buf
     }
 }
 
-impl<'a> Wiggler<'a> {
+impl<'a> StackShifter<'a> {
+    fn new(arg_slice: &'a mut [usize], orig_idx: usize,) -> Self {
+        Self {
+            arg_slice,
+            orig_idx,
+            idx: 0,
+            idx_argv: None,
+            idx_envp: None,
+            idx_extra_env: None,
+        }
+    }
+
     #[inline(always)]
     fn copy(&mut self, count: usize) {
         self.arg_slice
@@ -353,6 +363,11 @@ impl<'a> Wiggler<'a> {
     }
 
     #[inline(always)]
+    fn mark_extra_env(&mut self) {
+        self.idx_extra_env = Some(self.idx);
+    }
+
+    #[inline(always)]
     fn push(&mut self, value: usize) {
         self.arg_slice[self.idx] = value;
         log::trace!(" Added [{}]: {:x}", self.idx, value);
@@ -360,14 +375,18 @@ impl<'a> Wiggler<'a> {
     }
 
     #[inline(always)]
-    fn finalize(self) -> WiggledStack {
+    fn finalize(self) -> StartContext {
         let idx_argv = self.idx_argv.expect("Must have argv");
         let idx_envp = self.idx_envp.expect("Must have envp");
+        let extra_env = self.idx_extra_env.map(|idx| {
+            (&self.arg_slice[idx] as *const usize).cast()
+        });
 
-        WiggledStack {
+        StartContext {
             sp: self.arg_slice.as_ptr().cast(),
             argv: (&self.arg_slice[idx_argv] as *const usize).cast(),
             envp: (&self.arg_slice[idx_envp] as *const usize).cast(),
+            extra_env,
         }
     }
 }
@@ -375,7 +394,7 @@ impl<'a> Wiggler<'a> {
 unsafe fn count_env(envp: *const *const u8) -> (usize, *const usize) {
     let mut envc = 0;
     let mut cur = envp;
-    while *cur != ptr::null() {
+    while !(*cur).is_null() {
         cur = cur.add(1);
         envc += 1;
     }
