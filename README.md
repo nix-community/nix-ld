@@ -20,7 +20,7 @@ You can also run `nix-ld-rs` directly for a list.
 
 ## Extra functionalities
 
-- `NIX_LD_LIBRARY_PATH` doesn't affect child processes (on `x86_64-linux`)
+- `NIX_LD_LIBRARY_PATH` doesn't affect child processes (on `x86_64-linux` and `aarch64-linux`)
     - For example, shell environments spawned by the binary VSCode Server no longer get polluted
 
 ## Testing

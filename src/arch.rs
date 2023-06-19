@@ -87,7 +87,7 @@ pub(crate) use elf_jmp;
 ///
 /// The goal is to revert our LD_LIBRARY_PATH changes once
 /// ld.so has done its job.
-#[repr(C)]
+#[repr(C, align(4096))]
 #[derive(Debug)]
 pub struct TrampolineContext {
     entry: *const c_void,
@@ -136,6 +136,27 @@ cfg_match::cfg_match! {
                 "jmp [rip + {context}]",
                 context = sym TRAMPOLINE_CONTEXT,
                 size = const core::mem::size_of::<*const u8>(),
+                options(noreturn),
+            )
+        }
+    }
+    target_arch = "aarch64" => {
+        pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_trampoline);
+
+        #[naked]
+        unsafe extern "C" fn entry_trampoline() -> ! {
+            core::arch::asm!(
+                "adrp x8, {context}",
+                "ldr x9, [x8, {env_rewrite_off}]", // .env_rewrite
+                "cbz x9, 1f",
+                "ldr x10, [x8, {env_to_off}]", // .env_to
+                "str x10, [x9]",
+                "1:",
+                "ldr x8, [x8]",
+                "br x8",
+                context = sym TRAMPOLINE_CONTEXT,
+                env_rewrite_off = const core::mem::size_of::<*const u8>(),
+                env_to_off = const core::mem::size_of::<*const u8>() * 2,
                 options(noreturn),
             )
         }

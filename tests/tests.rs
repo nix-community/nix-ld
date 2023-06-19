@@ -80,7 +80,7 @@ fn test_dlopen(libtest: &str) {
 /// Check that LD_LIBRARY_PATH is restored.
 #[cfg(all(
     feature = "entry_trampoline",
-    any(target_arch = "x86_64")
+    any(target_arch = "x86_64", target_arch = "aarch64")
 ))]
 #[rstest]
 fn test_ld_path_restore(libtest: &str, _dt_needed_bin: &Path) {
