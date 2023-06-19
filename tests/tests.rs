@@ -2,9 +2,8 @@ use std::env::{self, remove_var, set_var};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use rstest::*;
-
 use lazy_static::lazy_static;
+use rstest::*;
 use tempfile::TempDir;
 
 #[fixture]
