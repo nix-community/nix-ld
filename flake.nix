@@ -34,7 +34,6 @@
   in {
     packages = rec {
       nix-ld-rs = pkgs.callPackage ./package.nix {};
-      nix-ld = nix-ld-rs;
       default = nix-ld-rs;
     };
     devShell = pkgs.mkShell {
