@@ -36,6 +36,10 @@
       nix-ld-rs = pkgs.callPackage ./package.nix {};
       default = nix-ld-rs;
     };
+    checks = import ./nixos-tests {
+      inherit pkgs;
+      nix-ld-rs = self.packages.${system}.nix-ld-rs;
+    };
     devShell = pkgs.mkShell {
       nativeBuildInputs = with pkgs; [
         rustDev
@@ -50,5 +54,9 @@
 
       RUSTC_BOOTSTRAP = "1";
     };
-  });
+  }) // {
+    overlays.default = final: prev: {
+      nix-ld-rs = final.callPackage ./package.nix { };
+    };
+  };
 }

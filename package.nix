@@ -1,4 +1,5 @@
 { stdenv
+, pkgs
 , rustPlatform
 , nix-gitignore
 }:
@@ -7,35 +8,40 @@ let
   libDir = if builtins.elem stdenv.system [ "x86_64-linux" "mips64-linux" "powerpc64le-linux" ]
            then "/lib64"
            else "/lib";
-in
-rustPlatform.buildRustPackage {
-  name = "nix-ld-rs";
 
-  cargoLock.lockFile = ./Cargo.lock;
+  nix-ld-rs = rustPlatform.buildRustPackage {
+    name = "nix-ld-rs";
 
-  src = nix-gitignore.gitignoreSource [] ./.;
+    cargoLock.lockFile = ./Cargo.lock;
 
-  hardeningDisable = [ "stackprotector" ];
+    src = nix-gitignore.gitignoreSource [] ./.;
 
-  NIX_SYSTEM = stdenv.system;
-  RUSTC_BOOTSTRAP = "1";
+    hardeningDisable = [ "stackprotector" ];
 
-  preCheck = ''
-    export NIX_LD=${stdenv.cc.bintools.dynamicLinker}
-  '';
+    NIX_SYSTEM = stdenv.system;
+    RUSTC_BOOTSTRAP = "1";
 
-  postInstall = ''
-    mkdir -p $out/libexec
-    ln -s $out/bin/nix-ld-rs $out/libexec/nix-ld-rs
-    ln -s $out/bin/nix-ld-rs $out/libexec/nix-ld
+    preCheck = ''
+      export NIX_LD=${stdenv.cc.bintools.dynamicLinker}
+    '';
 
-    mkdir -p $out/nix-support
+    postInstall = ''
+      mkdir -p $out/libexec
+      ln -s $out/bin/nix-ld-rs $out/libexec/nix-ld-rs
+      ln -s $out/bin/nix-ld-rs $out/libexec/nix-ld
 
-    ldpath=${libDir}/$(basename ${stdenv.cc.bintools.dynamicLinker})
-    echo "$ldpath" > $out/nix-support/ldpath
-    mkdir -p $out/lib/tmpfiles.d/
-    cat > $out/lib/tmpfiles.d/nix-ld.conf <<EOF
-      L+ $ldpath - - - - $out/libexec/nix-ld-rs
-    EOF
-  '';
-}
+      mkdir -p $out/nix-support
+
+      ldpath=${libDir}/$(basename ${stdenv.cc.bintools.dynamicLinker})
+      echo "$ldpath" > $out/nix-support/ldpath
+      mkdir -p $out/lib/tmpfiles.d/
+      cat > $out/lib/tmpfiles.d/nix-ld.conf <<EOF
+        L+ $ldpath - - - - $out/libexec/nix-ld-rs
+      EOF
+    '';
+
+    passthru.tests = import ./nixos-tests {
+      inherit pkgs nix-ld-rs;
+    };
+  };
+in nix-ld-rs
