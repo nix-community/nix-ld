@@ -10,10 +10,10 @@ fn main() {
         .flag("-ffreestanding")
         .flag("-fvisibility=hidden")
         .flag("-fno-common")
-        // We don't want it to be linked in the integration tests
+        // We don't want nolibc to be linked in the integration tests
         // TODO: Send an issue to cc-rs to restrict rustc-link-arg to specific targets
-        // This way we are losing a few "cargo:rerun-if-env-changed=" which
-        // are useful.
+        // By disabling cargo_metadata, we are also losing a few "cargo:rerun-if-env-changed="
+        // which are useful :(
         .cargo_metadata(false)
         .compile("c_kinda");
 
@@ -29,11 +29,16 @@ fn main() {
     println!("cargo:rustc-link-arg-bins=-fstack-protector");
     println!("cargo:rustc-link-arg-bins=-Wl,--no-dynamic-linker");
 
+    let target = env::var("TARGET").unwrap();
+
     // For Cargo integration tests
-    println!(
-        "cargo:rustc-env=NIX_LD_TEST_TARGET={}",
-        env::var("TARGET").unwrap()
-    );
+    println!("cargo:rustc-env=NIX_LD_TEST_TARGET={}", target);
+
+    // For cross-compiling in the devShell *only*
+    let target_suffix = target.replace('-', "_");
+    if let Ok(target_default_nix_ld) = env::var(format!("DEFAULT_NIX_LD_{}", target_suffix)) {
+        println!("cargo:rustc-env=DEFAULT_NIX_LD={}", target_default_nix_ld);
+    }
 
     //let out_dir = std::env::var("OUT_DIR").unwrap();
     //panic!("OUT_DIR: {}", out_dir);
