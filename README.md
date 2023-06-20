@@ -37,3 +37,65 @@ It's recommended to set up transparent emulation using binfmt-misc so you can ru
 ```
 
 Run `cargo test` or `cargo nextest run` to run the integration tests, and `just test` to run them on all supported platforms (binfmt required).
+
+### Current behavior
+
+<table>
+<thead>
+  <tr>
+    <th rowspan="2"></th>
+    <th colspan="2">Launch</th>
+    <th colspan="2">Seen by ld.so</th>
+    <th colspan="2">Seen by getenv() and children <sup>(a)</sup></th>
+  </tr>
+  <tr>
+    <th>NIX_LD_LIBRARY_PATH</th>
+    <th>LD_LIBRARY_PATH</th>
+    <th>NIX_LD_LIBRARY_PATH</th>
+    <th>LD_LIBRARY_PATH</th>
+    <th>NIX_LD_LIBRARY_PATH</th>
+    <th>LD_LIBRARY_PATH</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td>1</td>
+    <td>(unset)</td>
+    <td>(unset)</td>
+    <td>(unset)</td>
+    <td>"/run/current-system/sw/share/nix-ld/lib"</td>
+    <td>(unset)</td>
+    <td>"" <sup>(b)</sup></td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>(unset)</td>
+    <td>"/some/lib"</td>
+    <td>(unset)</td>
+    <td>"/some/lib:/run/current-system/sw/share/nix-ld/lib"</td>
+    <td>(unset)</td>
+    <td>"/some/lib"</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>"/some/nix/ld/lib"</td>
+    <td>(unset)</td>
+    <td>(unset)</td>
+    <td>"/some/nix/ld/lib"</td>
+    <td>"/some/nix/ld/lib"</td>
+    <td>(unset)</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td>"/some/nix/ld/lib"</td>
+    <td>"/some/lib"</td>
+    <td>"/some/nix/ld/lib"</td>
+    <td>"/some/lib:/some/nix/ld/lib"</td>
+    <td>"/some/nix/ld/lib"</td>
+    <td>"/some/lib"</td>
+  </tr>
+</tbody>
+</table>
+
+<sup>(a)</sup> On X86-64 and AArch64 only (see `src/arch.rs`). On other platforms, the "Seen by ld.so" state will persist.<br/>
+<sup>(b)</sup> The variable will be present but set to an empty string.<br/>
