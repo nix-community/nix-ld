@@ -201,6 +201,7 @@ extern "C" fn real_main() -> ! {
                 log::warn!("- NIX_LD, {}", NIX_LD_SYSTEM_ENV);
                 log::warn!("- NIX_LD_LIBRARY_PATH, {}", NIX_LD_LIBRARY_PATH_SYSTEM_ENV);
                 log::warn!("- NIX_LD_LOG (error, warn, info, debug, trace)");
+                log::warn!("Default ld.so: {:?}", DEFAULT_NIX_LD);
             }
 
             args.handoff(|start| unsafe {

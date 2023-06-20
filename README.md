@@ -24,13 +24,16 @@ You can also run `nix-ld-rs` directly for a list.
 - `NIX_LD_LIBRARY_PATH` doesn't affect child processes (on `x86_64-linux` and `aarch64-linux`)
     - For example, shell environments spawned by the binary VSCode Server no longer get polluted
 
-## Testing
+## Development
 
+The included `devShell` provides all dependencies required to build the project.
+It's recommended to set up transparent emulation using binfmt-misc so you can run tests on all supported platforms:
+
+```nix
+{
+  # x86_64-linux, i686-linux, aarch64-linux
+  boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
+}
 ```
-cargo b
-cp -L $(which coreutils) ./
-chmod u+w ./coreutils
-patchelf --set-interpreter $PWD/target/debug/nix-ld-rs ./coreutils
-NIX_LD_LOG=trace ./coreutils
-NIX_LD= NIX_LD_LOG=trace ./coreutils
-```
+
+Run `cargo test` or `cargo nextest run` to run the integration tests, and `just test` to run them on all supported platforms (binfmt required).

@@ -27,9 +27,34 @@
       ];
     };
 
+    inherit (pkgs) lib;
+
+    otherSystems = lib.filter (s: system != s) supportedSystems;
+
+    crossPlatforms = map (crossSystem: let
+      pkgsCross = import nixpkgs {
+        inherit crossSystem;
+        localSystem = system;
+        overlays = [];
+      };
+
+      rustTargetSpec = pkgs.rust.toRustTargetSpec pkgsCross.stdenv.hostPlatform;
+      rustTargetSpecUnderscored = builtins.replaceStrings [ "-" ] [ "_" ] rustTargetSpec;
+      ccbin = "${pkgsCross.stdenv.cc}/bin/${pkgsCross.stdenv.cc.targetPrefix}cc";
+    in {
+      inherit rustTargetSpec;
+      env = {
+        "CARGO_TARGET_${lib.toUpper rustTargetSpecUnderscored}_LINKER" = ccbin;
+        "CC_${rustTargetSpecUnderscored}" = ccbin;
+        "DEFAULT_NIX_LD_${rustTargetSpecUnderscored}" = pkgsCross.stdenv.cc.bintools.dynamicLinker;
+      };
+    }) otherSystems;
+
+    crossEnvs = lib.foldl (acc: p: acc // p.env) {} crossPlatforms;
+
     rustDev = pkgs.rust-bin.stable."${pkgs.rustc.version}".default.override {
       extensions = [ "rust-src" ];
-      targets = [ "x86_64-unknown-linux-gnu" "i686-unknown-linux-gnu" "aarch64-unknown-linux-gnu" ];
+      targets = map (p: p.rustTargetSpec) crossPlatforms;
     };
   in {
     packages = rec {
@@ -40,20 +65,22 @@
       inherit pkgs;
       nix-ld-rs = self.packages.${system}.nix-ld-rs;
     };
-    devShell = pkgs.mkShell {
+    devShell = pkgs.mkShell (crossEnvs // {
       nativeBuildInputs = with pkgs; [
         rustDev
         cargo-bloat
         cargo-nextest
+        just
       ];
 
       hardeningDisable = [ "stackprotector" ];
 
       # For convenience in devShell
       DEFAULT_NIX_LD = pkgs.stdenv.cc.bintools.dynamicLinker;
+      NIX_LD = pkgs.stdenv.cc.bintools.dynamicLinker;
 
       RUSTC_BOOTSTRAP = "1";
-    };
+    });
   }) // {
     overlays.default = final: prev: {
       nix-ld-rs = final.callPackage ./package.nix { };
