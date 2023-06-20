@@ -35,9 +35,9 @@ pub const R_RELATIVE: u32 = {
 pub const NIX_SYSTEM: &str = match option_env!("NIX_SYSTEM") {
     Some(system) => system,
     None => cfg_match::cfg_match! {
-        target_arch = "x86_64" => "x86_64-linux",
-        target_arch = "x86" => "i686-linux",
-        target_arch = "aarch64" => "aarch64-linux",
+        target_arch = "x86_64" => "x86_64_linux",
+        target_arch = "x86" => "i686_linux",
+        target_arch = "aarch64" => "aarch64_linux",
     },
 };
 
