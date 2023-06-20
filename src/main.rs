@@ -10,8 +10,8 @@ mod args;
 mod auxv;
 mod elf;
 mod fixup;
-mod nolibc;
 mod support;
+mod sys;
 
 use core::ffi::{c_void, CStr};
 use core::mem::MaybeUninit;
@@ -206,8 +206,8 @@ extern "C" fn real_main() -> ! {
 
             args.handoff(|start| unsafe {
                 log::debug!("Start context: {:#?}", start);
-                nolibc::execve(nix_ld.as_ptr(), start.argv, start.envp);
-                nolibc::abort();
+                sys::execve(nix_ld.as_ptr(), start.argv, start.envp);
+                sys::abort();
             });
         }
         Some(ref mut at_base) => {

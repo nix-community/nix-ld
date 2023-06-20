@@ -6,8 +6,8 @@ use core::slice;
 
 use crate::arch::STACK_ALIGNMENT;
 use crate::auxv::AuxVec;
-use crate::nolibc::new_slice_leak;
 use crate::support::explode;
+use crate::sys::new_slice_leak;
 
 trait CStrExt {
     fn parse_env(&self) -> Option<(&[u8], &[u8])>;

@@ -11,13 +11,15 @@ use crate::arch::elf_types::{
     header::{Header, ET_DYN},
     program_header::{ProgramHeader, PF_R, PF_W, PF_X, PT_LOAD},
 };
-use crate::nolibc::{
-    self, ENOENT, MAP_ANONYMOUS, MAP_FAILED, MAP_FIXED, MAP_PRIVATE, O_RDONLY, PROT_EXEC,
-    PROT_NONE, PROT_READ, PROT_WRITE,
+#[rustfmt::skip]
+use crate::sys::{
+    self, errno, Error as IoError, File, Read,
+    MAP_ANONYMOUS, MAP_FIXED, MAP_PRIVATE, MAP_FAILED,
+    PROT_EXEC, PROT_NONE, PROT_READ, PROT_WRITE,
 };
 
 pub struct ElfHandle {
-    fd: i32,
+    file: File,
     phs: ProgramHeaders,
     page_size: usize,
     entry_point_v: usize,
@@ -49,71 +51,61 @@ struct LoadableSummary {
 }
 
 trait ProgramHeaderExt {
-    fn prot_flags(&self) -> i32;
+    fn prot_flags(&self) -> u32;
 }
 
 impl ElfHandle {
-    pub fn open(path: &CStr, page_size: usize) -> Result<Self, ()> {
-        let mut fd = unsafe { nolibc::open(path.as_ptr(), O_RDONLY, 0) };
-
-        if fd < 0 && nolibc::errno() == ENOENT {
+    pub fn open(path: &CStr, page_size: usize) -> Result<Self, IoError> {
+        let mut file = File::open_cstr(path).or_else(|err| {
             let path_bytes = path.to_bytes();
-            if path_bytes.ends_with(&[b'\n']) {
-                // ${stdenv.cc}/nix-support/dynamic-linker contains trailing newline
-                fd = nolibc::alloc_temp(path_bytes.len(), |path_trunc| {
-                    path_trunc.copy_from_slice(path_bytes);
-                    path_trunc[path_bytes.len() - 1] = 0;
-                    let path_trunc = CStr::from_bytes_with_nul(path_trunc).unwrap();
-                    unsafe { nolibc::open(path_trunc.as_ptr(), O_RDONLY, 0) }
-                });
+            if err != errno::ENOENT || !path_bytes.ends_with(&[b'\n']) {
+                return Err(err);
             }
-        }
 
-        if fd < 0 {
-            log::error!("Failed to open {:?} ({})", path, nolibc::errno());
-            return Err(());
-        }
+            // ${stdenv.cc}/nix-support/dynamic-linker contains trailing newline
+            let truncated = &path_bytes[..path_bytes.len() - 1];
+            File::open(truncated)
+        })?;
 
-        let mut header = Header::default();
-        let read = unsafe {
-            nolibc::read(
-                fd,
-                &mut header as *mut _ as *mut c_void,
-                mem::size_of::<Header>(),
-            )
-        };
-        if read < 0 {
-            log::error!(
-                "Failed to read ELF header of {:?} ({})",
-                path,
-                nolibc::errno()
-            );
-            return Err(());
-        }
+        // TODO: Better error abstractions
+        let mut buf = [0u8; mem::size_of::<Header>()];
+        file.read_exact(&mut buf).map_err(|_| {
+            log::error!("File too small");
+            IoError::Unknown
+        })?;
 
+        let header = Header::from_bytes(&buf);
         if &header.e_ident[..4] != b"\x7fELF".as_slice() {
             log::error!("{:?} is not an ELF", path);
-            return Err(());
+            return Err(IoError::Unknown);
         }
 
         if header.e_type != ET_DYN {
             log::error!("{:?} is not a dynamic library", path);
-            return Err(());
+            return Err(IoError::Unknown);
         }
 
         let phsize = header.e_phentsize as usize * header.e_phnum as usize;
         if phsize == 0 || phsize > 65536 {
             log::error!("{:?} has incorrect program header size {}", path, phsize);
-            return Err(());
+            return Err(IoError::Unknown);
         }
 
         let eh_map_len = mem::size_of::<Header>() + phsize;
-        let eh_map =
-            unsafe { nolibc::mmap(ptr::null_mut(), eh_map_len, PROT_READ, MAP_PRIVATE, fd, 0) };
+        let eh_map = unsafe {
+            sys::mmap(
+                ptr::null_mut(),
+                eh_map_len,
+                PROT_READ,
+                MAP_PRIVATE,
+                file.as_raw_fd(),
+                0,
+            )
+        };
 
         if eh_map == MAP_FAILED {
-            log::error!("Couldn't map headers of {:?} ({})", path, nolibc::errno());
-            return Err(());
+            log::error!("Couldn't map headers of {:?} ({})", path, sys::errno());
+            return Err(IoError::Unknown);
         }
 
         let phdr = unsafe { eh_map.add(mem::size_of::<Header>()) };
@@ -125,7 +117,7 @@ impl ElfHandle {
         };
 
         Ok(Self {
-            fd,
+            file,
             phs,
             page_size,
             entry_point_v: header.e_entry as usize,
@@ -145,7 +137,7 @@ impl ElfHandle {
         // For now, we assume the loader is relocatable and let
         // the kernel decide the load addr.
         let load_addr = unsafe {
-            nolibc::mmap(
+            sys::mmap(
                 ptr::null_mut(), // TODO: Maybe the ELF isn't relocatable
                 self.page_align(summary.total_mapping_size),
                 PROT_NONE,
@@ -213,18 +205,18 @@ impl ElfHandle {
                         ph = DisplayPFlags(ph),
                     );
 
-                    nolibc::mmap(
+                    sys::mmap(
                         addr as *mut c_void,
                         size,
                         prot,
                         MAP_PRIVATE | MAP_FIXED,
-                        self.fd,
+                        self.file.as_raw_fd(),
                         offset.try_into().unwrap(),
                     )
                 };
 
                 if mapping == MAP_FAILED {
-                    log::error!("Failed to map segment 0x{:x} ({})", vaddr, nolibc::errno());
+                    log::error!("Failed to map segment 0x{:x} ({})", vaddr, sys::errno());
                     return Err(());
                 }
             }
@@ -236,7 +228,7 @@ impl ElfHandle {
                 let zero_end = self.page_align(zero_addr);
                 if zero_end > zero_addr {
                     unsafe {
-                        nolibc::memset(zero_addr as *mut c_void, 0, zero_end - zero_addr);
+                        sys::memset(zero_addr as *mut c_void, 0, zero_end - zero_addr);
                     }
                 }
 
@@ -250,7 +242,7 @@ impl ElfHandle {
                             ph = DisplayPFlags(ph),
                         );
 
-                        nolibc::mmap(
+                        sys::mmap(
                             addr,
                             size,
                             prot,
@@ -288,7 +280,7 @@ impl ElfHandle {
 impl Drop for ElfHandle {
     fn drop(&mut self) {
         unsafe {
-            nolibc::munmap(self.eh_map, self.eh_map_len);
+            sys::munmap(self.eh_map, self.eh_map_len);
         }
     }
 }
@@ -376,7 +368,7 @@ impl<'ph> Iterator for ProgramHeadersIter<'ph> {
 
 impl ProgramHeaderExt for ProgramHeader {
     #[inline(always)]
-    fn prot_flags(&self) -> i32 {
+    fn prot_flags(&self) -> u32 {
         let p_flags = &self.p_flags;
         (if p_flags & PF_R != 0 { PROT_READ } else { 0 })
             | (if p_flags & PF_W != 0 { PROT_WRITE } else { 0 })

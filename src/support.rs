@@ -1,22 +1,11 @@
 //! Low-level support.
 
-use core::fmt::{self, Write};
+use core::fmt::Write;
 
 use crate::arch::STACK_ALIGNMENT;
-use crate::nolibc;
+use crate::sys;
 
 pub static LOGGER: StderrLogger = StderrLogger;
-
-pub struct Fd(i32);
-impl fmt::Write for Fd {
-    fn write_str(&mut self, buf: &str) -> fmt::Result {
-        unsafe {
-            nolibc::write(self.0, buf.as_ptr(), buf.len());
-        }
-
-        Ok(())
-    }
-}
 
 pub struct StderrLogger;
 
@@ -27,8 +16,8 @@ impl log::Log for StderrLogger {
 
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
-            let mut fd = Fd(2);
-            writeln!(fd, "[nix-ld] {:>5}: {}", record.level(), record.args()).unwrap();
+            let mut stderr = sys::stderr();
+            writeln!(stderr, "[nix-ld] {:>5}: {}", record.level(), record.args()).unwrap();
         }
     }
 
@@ -55,21 +44,21 @@ pub fn explode(s: &str) -> ! {
     let prefix = "[nix-ld] FATAL: ";
 
     unsafe {
-        nolibc::write(2, prefix.as_ptr(), prefix.len());
-        nolibc::write(2, s.as_ptr(), s.len());
-        nolibc::write(2, "\n".as_ptr(), 1);
-        nolibc::abort();
+        sys::write(2, prefix.as_ptr(), prefix.len());
+        sys::write(2, s.as_ptr(), s.len());
+        sys::write(2, "\n".as_ptr(), 1);
+        sys::abort();
     }
 }
 
 #[cfg(not(test))]
 #[panic_handler]
 fn panic_handler(info: &core::panic::PanicInfo) -> ! {
-    let mut stderr = Fd(2);
+    let mut stderr = sys::stderr();
     writeln!(stderr, "[nix-ld] FATAL: {}", info).unwrap();
 
     unsafe {
-        nolibc::abort();
+        sys::abort();
     }
 }
 
