@@ -229,6 +229,15 @@ impl ElfHandle {
 
             // Memory beyond memsz is zero-initialized
             if memsz > filesz && (ph.p_flags & PF_W != 0) {
+                // Zero out the fractional page
+                let zero_addr = load_bias + vaddr + filesz;
+                let zero_end = self.page_align(zero_addr);
+                if zero_end > zero_addr {
+                    unsafe {
+                        nolibc::memset(zero_addr as *mut c_void, 0, zero_end - zero_addr);
+                    }
+                }
+
                 if file_map_size < total_map_size {
                     let mapping = unsafe {
                         let addr = load_addr.add(file_map_size);
@@ -247,15 +256,6 @@ impl ElfHandle {
                         log::error!("Failed to map anonymous portion for segment 0x{:x}", vaddr);
                         return Err(());
                     }
-                }
-
-                // Zeroing to (load_bias + vaddr + memsz) isn't enough - Need to zero the
-                // entire page
-                unsafe {
-                    let zero_addr = (load_bias + vaddr + filesz) as *mut c_void;
-                    let zero_end = self.page_align(load_bias + vaddr + memsz);
-                    let zero_size = zero_end - zero_addr as usize;
-                    nolibc::memset(zero_addr, 0, zero_size);
                 }
             }
         }
