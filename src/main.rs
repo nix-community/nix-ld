@@ -166,8 +166,8 @@ extern "C" fn real_main() -> ! {
 
         EnvEdit {
             entry: ptr::null(),
-            old_env: DEFAULT_NIX_LD_LIBRARY_PATH_ENV.as_ptr().cast(),
-            new_env,
+            old_string: DEFAULT_NIX_LD_LIBRARY_PATH_ENV.as_ptr().cast(),
+            new_string: new_env,
         }
     };
 
@@ -220,7 +220,7 @@ extern "C" fn real_main() -> ! {
         log::info!("Using entry trampoline");
         if let Some(ref mut at_entry) = args.auxv_mut().at_entry {
             unsafe {
-                arch::TRAMPOLINE_CONTEXT.entry(at_entry.value());
+                arch::TRAMPOLINE_CONTEXT.set_elf_entry(at_entry.value());
                 arch::TRAMPOLINE_CONTEXT.revert_env(&env_edit);
             }
             at_entry.set(trampoline as *const _);

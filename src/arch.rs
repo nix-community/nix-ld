@@ -90,30 +90,30 @@ pub(crate) use elf_jmp;
 #[repr(C, align(4096))]
 #[derive(Debug)]
 pub struct TrampolineContext {
-    entry: *const c_void,
-    env_rewrite: *const *const u8,
-    env_to: *const u8,
+    elf_entry: *const c_void,
+    env_entry: *const *const u8,
+    env_string: *const u8,
 }
 
 impl TrampolineContext {
-    pub fn entry(&mut self, entry: *const c_void) {
-        self.entry = entry;
+    pub fn set_elf_entry(&mut self, entry: *const c_void) {
+        self.elf_entry = entry;
     }
 
     pub fn revert_env(&mut self, edit: &EnvEdit) {
-        self.env_rewrite = edit.entry;
-        self.env_to = edit.old_env;
+        self.env_entry = edit.entry;
+        self.env_string = edit.old_string;
     }
 
     pub fn revert_env_entry(&mut self, entry: *const *const u8) {
-        self.env_rewrite = entry;
+        self.env_entry = entry;
     }
 }
 
 pub static mut TRAMPOLINE_CONTEXT: TrampolineContext = TrampolineContext {
-    entry: ptr::null(),
-    env_rewrite: ptr::null(),
-    env_to: ptr::null(),
+    elf_entry: ptr::null(),
+    env_entry: ptr::null(),
+    env_string: ptr::null(),
 };
 
 cfg_match::cfg_match! {
@@ -127,10 +127,10 @@ cfg_match::cfg_match! {
         unsafe extern "C" fn entry_trampoline() -> ! {
             core::arch::asm!(
                 "lea r10, [rip + {context}]",
-                "mov r11, [r10 + {size} * 1]", // .env_rewrite
+                "mov r11, [r10 + {size} * 1]", // .env_entry
                 "test r11, r11",
                 "jz 1f",
-                "mov r10, [r10 + {size} * 2]", // .env_to
+                "mov r10, [r10 + {size} * 2]", // .env_string
                 "mov [r11], r10",
                 "1:",
                 "jmp [rip + {context}]",
@@ -147,16 +147,16 @@ cfg_match::cfg_match! {
         unsafe extern "C" fn entry_trampoline() -> ! {
             core::arch::asm!(
                 "adrp x8, {context}",
-                "ldr x9, [x8, {env_rewrite_off}]", // .env_rewrite
+                "ldr x9, [x8, {env_entry_off}]", // .env_entry
                 "cbz x9, 1f",
-                "ldr x10, [x8, {env_to_off}]", // .env_to
+                "ldr x10, [x8, {env_string_off}]", // .env_string
                 "str x10, [x9]",
                 "1:",
                 "ldr x8, [x8]",
                 "br x8",
                 context = sym TRAMPOLINE_CONTEXT,
-                env_rewrite_off = const core::mem::size_of::<*const u8>(),
-                env_to_off = const core::mem::size_of::<*const u8>() * 2,
+                env_entry_off = const core::mem::size_of::<*const u8>(),
+                env_string_off = const core::mem::size_of::<*const u8>() * 2,
                 options(noreturn),
             )
         }

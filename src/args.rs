@@ -56,11 +56,10 @@ pub struct StartContext {
     pub extra_env: Option<*const *const u8>,
 }
 
-#[repr(C)]
 pub struct EnvEdit {
     pub entry: *const *const u8,
-    pub old_env: *const u8,
-    pub new_env: *const u8,
+    pub old_string: *const u8,
+    pub new_string: *const u8,
 }
 
 struct StackShifter<'a> {
@@ -169,7 +168,7 @@ impl Args {
 
             // We want it to look like this:
             //
-            // [argc][argv][0][envp][newenv][0][auxv][last entry][padding]
+            // [argc][argv][0][envp][newenv][0][auxv][last element][padding]
             shifter.copy(1); // [argc]
             shifter.mark_argv();
             shifter.copy(self.argc + 1); // [argv][0]
@@ -177,7 +176,7 @@ impl Args {
             shifter.copy(self.envc); // [envp]
             shifter.mark_extra_env();
             shifter.push(extra_env as usize);
-            shifter.copy(1 + auxvc * 2 + 2); // [0][auxv][last entry]
+            shifter.copy(1 + auxvc * 2 + 2); // [0][auxv][last element]
 
             f(shifter.finalize());
         } else {
@@ -301,7 +300,7 @@ impl VarHandle {
         f(self.value(), &mut new_buf[name_len + 1..whole_len]);
 
         log::debug!(
-            "Edited env entry {:?} ({:?} -> {:?})",
+            "Edited env element {:?} ({:?} -> {:?})",
             self.ptr,
             old_buf,
             new_buf.as_ptr()
@@ -309,8 +308,8 @@ impl VarHandle {
 
         EnvEdit {
             entry: self.ptr,
-            old_env: old_buf,
-            new_env: new_buf.as_ptr(),
+            old_string: old_buf,
+            new_string: new_buf.as_ptr(),
         }
     }
 
