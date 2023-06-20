@@ -1,4 +1,4 @@
-use std::env::{self, remove_var, set_var};
+use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -27,9 +27,10 @@ fn dt_needed_bin() -> PathBuf {
 fn test_hello() {
     let bin = compile_test_bin("hello", &[]);
 
-    remove_var("LD_LIBRARY_PATH");
-    remove_var("NIX_LD_LIBRARY_PATH");
-    let (stdout, _) = must_succeed(&bin);
+    let (stdout, _) = Command::new(&bin)
+        .env_remove("LD_LIBRARY_PATH")
+        .env_remove("NIX_LD_LIBRARY_PATH")
+        .must_succeed();
     assert!(stdout.contains("Hello, world!"));
 }
 
@@ -38,17 +39,19 @@ fn test_hello() {
 fn test_dt_needed(libtest: &str, dt_needed_bin: &Path) {
     // First make sure it doesn't run without the library
     {
-        remove_var("LD_LIBRARY_PATH");
-        remove_var("NIX_LD_LIBRARY_PATH");
-        let (_, stderr) = must_fail(dt_needed_bin);
+        let (_, stderr) = Command::new(&dt_needed_bin)
+            .env_remove("LD_LIBRARY_PATH")
+            .env_remove("NIX_LD_LIBRARY_PATH")
+            .must_fail();
         assert!(stderr.contains("loading shared"));
     }
 
     // Now it should work
     {
-        remove_var("LD_LIBRARY_PATH");
-        set_var("NIX_LD_LIBRARY_PATH", libtest);
-        let (stdout, _) = must_succeed(dt_needed_bin);
+        let (stdout, _) = Command::new(&dt_needed_bin)
+            .env_remove("LD_LIBRARY_PATH")
+            .env("NIX_LD_LIBRARY_PATH", libtest)
+            .must_succeed();
         assert!(stdout.contains("Hello from libtest"));
     }
 }
@@ -61,17 +64,19 @@ fn test_dlopen(libtest: &str) {
 
     // First make sure it doesn't run without the library
     {
-        remove_var("LD_LIBRARY_PATH");
-        remove_var("NIX_LD_LIBRARY_PATH");
-        let (_, stderr) = must_fail(&bin);
+        let (_, stderr) = Command::new(&bin)
+            .env_remove("LD_LIBRARY_PATH")
+            .env_remove("NIX_LD_LIBRARY_PATH")
+            .must_fail();
         assert!(stderr.contains("Failed to dlopen libtest.so"));
     }
 
     // Now it should work
     {
-        remove_var("LD_LIBRARY_PATH");
-        set_var("NIX_LD_LIBRARY_PATH", libtest);
-        let (stdout, _) = must_succeed(&bin);
+        let (stdout, _) = Command::new(&bin)
+            .env_remove("LD_LIBRARY_PATH")
+            .env("NIX_LD_LIBRARY_PATH", libtest)
+            .must_succeed();
         assert!(stdout.contains("Hello from libtest"));
     }
 }
@@ -84,20 +89,25 @@ fn test_dlopen(libtest: &str) {
 #[rstest]
 fn test_ld_path_restore(libtest: &str, _dt_needed_bin: &Path) {
     let bin = compile_test_bin("ld-path-restore", &["test"]);
-    set_var("NIX_LD_LIBRARY_PATH", format!("{}:POISON", libtest));
+
+    let nix_ld_path = format!("{}:POISON", libtest);
 
     // First try without LD_LIBRARY_PATH
     {
-        remove_var("LD_LIBRARY_PATH");
-        let (stdout, stderr) = must_succeed(&bin);
+        let (stdout, stderr) = Command::new(&bin)
+            .env_remove("LD_LIBRARY_PATH")
+            .env("NIX_LD_LIBRARY_PATH", &nix_ld_path)
+            .must_succeed();
         assert!(stderr.contains("No LD_LIBRARY_PATH"));
         assert!(stdout.contains("Hello from libtest"));
     }
 
     // Now with LD_LIBRARY_PATH
     {
-        set_var("LD_LIBRARY_PATH", "NEEDLE");
-        let (stdout, stderr) = must_succeed(&bin);
+        let (stdout, stderr) = Command::new(&bin)
+            .env("LD_LIBRARY_PATH", "NEEDLE")
+            .env("NIX_LD_LIBRARY_PATH", &nix_ld_path)
+            .must_succeed();
         assert!(stderr.contains("LD_LIBRARY_PATH contains needle"));
         assert!(stdout.contains("Hello from libtest"));
         assert!(stderr.contains("Launching child process"));
@@ -168,41 +178,45 @@ fn compile_test_bin(name: &str, libs: &[&str]) -> PathBuf {
     out_path
 }
 
-fn must_succeed(bin: impl AsRef<Path>) -> (String, String) {
-    run(bin, true)
+trait CommandExt {
+    fn output_checked(&mut self, want_success: bool) -> (String, String);
+    fn must_succeed(&mut self) -> (String, String);
+    fn must_fail(&mut self) -> (String, String);
 }
 
-fn must_fail(bin: impl AsRef<Path>) -> (String, String) {
-    run(bin, false)
-}
+impl CommandExt for Command {
+    fn output_checked(&mut self, want_success: bool) -> (String, String) {
+        eprintln!("Running binary {:?}", self.get_program());
+        let output = self.output().expect("Failed to spawn test binary");
 
-fn run(bin: impl AsRef<Path>, want_success: bool) -> (String, String) {
-    let bin = bin.as_ref();
+        let stdout = String::from_utf8(output.stdout).expect("stdout contains non-UTF-8");
+        let stderr = String::from_utf8(output.stderr).expect("stderr contains non-UTF-8");
 
-    eprintln!("Running binary {:?}", bin);
-    let output = Command::new(bin)
-        .output()
-        .expect("Failed to spawn test binary");
+        print!("{}", stdout);
+        eprint!("{}", stderr);
 
-    let stdout = String::from_utf8(output.stdout).expect("stdout contains non-UTF-8");
-    let stderr = String::from_utf8(output.stderr).expect("stderr contains non-UTF-8");
+        if want_success {
+            assert!(
+                output.status.success(),
+                "{:?} did not run successfully",
+                self.get_program()
+            );
+        } else {
+            assert!(
+                !output.status.success(),
+                "{:?} unexpectedly succeeded",
+                self.get_program()
+            );
+        }
 
-    print!("{}", stdout);
-    eprint!("{}", stderr);
-
-    if want_success {
-        assert!(
-            output.status.success(),
-            "{:?} did not run successfully",
-            bin.file_name().unwrap()
-        );
-    } else {
-        assert!(
-            !output.status.success(),
-            "{:?} unexpectedly succeeded",
-            bin.file_name().unwrap()
-        );
+        (stdout, stderr)
     }
 
-    (stdout, stderr)
+    fn must_succeed(&mut self) -> (String, String) {
+        self.output_checked(true)
+    }
+
+    fn must_fail(&mut self) -> (String, String) {
+        self.output_checked(false)
+    }
 }
