@@ -14,6 +14,7 @@ It honors the following environment variables:
 - `NIX_LD_{system}`
 - `NIX_LD_LIBRARY_PATH`
 - `NIX_LD_LIBRARY_PATH_{system}`
+- `NIX_LD_LOG` (error, warn, info, debug, trace)
 
 Here `{system}` refers to the Nix `system`, like `x86_64-linux`.
 You can also run `nix-ld-rs` directly for a list.
