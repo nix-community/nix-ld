@@ -38,11 +38,8 @@ const DEFAULT_NIX_LD: &CStr = unsafe {
 };
 
 const DEFAULT_NIX_LD_LIBRARY_PATH: &[u8] = b"/run/current-system/sw/share/nix-ld/lib";
-const DEFAULT_NIX_LD_LIBRARY_PATH_ENV: &CStr = unsafe {
-    CStr::from_bytes_with_nul_unchecked(
-        concat_slices!([u8]: b"NIX_LD_LIBRARY_PATH=", DEFAULT_NIX_LD_LIBRARY_PATH, b"\0"),
-    )
-};
+const EMPTY_LD_LIBRARY_PATH_ENV: &CStr =
+    unsafe { CStr::from_bytes_with_nul_unchecked(b"LD_LIBRARY_PATH=\0") };
 
 #[derive(Default)]
 struct Context {
@@ -164,9 +161,15 @@ extern "C" fn real_main() -> ! {
             )
             .unwrap();
 
+        // If the entry trampoline is available on the platform, LD_LIBRARY_PATH
+        // will be replaced with an empty LD_LIBRARY_PATH when ld.so launches
+        // the actual program.
+        //
+        // We cannot replace it with NIX_LD_LIBRARY_PATH as it would take
+        // precedence over config files.
         EnvEdit {
             entry: ptr::null(),
-            old_string: DEFAULT_NIX_LD_LIBRARY_PATH_ENV.as_ptr().cast(),
+            old_string: EMPTY_LD_LIBRARY_PATH_ENV.as_ptr().cast(),
             new_string: new_env,
         }
     };
