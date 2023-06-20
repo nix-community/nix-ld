@@ -124,12 +124,12 @@ fn get_source_file(file: &str) -> PathBuf {
     // CARGO_MANIFEST_DIR doesn't necessarily point to the source, but
     // then there is no good way to get the source from here
     let base = PathBuf::from(&env::var("CARGO_MANIFEST_DIR").unwrap());
-    base.join("tests").join(file)
+    base.join(file)
 }
 
 fn compile_test_lib(name: &str) {
     let cc = find_cc();
-    let source_path = get_source_file(&format!("lib{}.c", name));
+    let source_path = get_source_file(&format!("tests/lib{}.c", name));
     let out_path = TMPDIR.path().join(&format!("lib{}.so", name));
 
     let status = Command::new(cc)
@@ -145,7 +145,7 @@ fn compile_test_lib(name: &str) {
 
 fn compile_test_bin(name: &str, libs: &[&str]) -> PathBuf {
     let cc = find_cc();
-    let source_path = get_source_file(&format!("{}.c", name));
+    let source_path = get_source_file(&format!("tests/{}.c", name));
     let out_path = TMPDIR.path().join(name);
 
     let out_dir_arg = format!("-DOUT_DIR=\"{}\"", TMPDIR.path().to_str().unwrap());
