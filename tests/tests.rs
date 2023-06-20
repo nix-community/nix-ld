@@ -125,7 +125,8 @@ lazy_static! {
 }
 
 fn find_cc() -> String {
-    env::var(format!("CC_{}", TARGET))
+    let target_suffix = TARGET.replace('-', "_");
+    env::var(format!("CC_{}", target_suffix))
         .or_else(|_| env::var("CC"))
         .unwrap_or_else(|_| "cc".to_string())
 }
