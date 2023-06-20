@@ -196,35 +196,38 @@ impl ElfHandle {
             let file_map_size =
                 self.page_align(core::cmp::min(fend, vend)) - self.page_start(vaddr);
 
-            // Assumption:
-            //
-            //     page_offset(ph.p_vaddr) == page_offset(ph.p_offset)
-            //
-            // We do the following mmap for the file-backed portion:
-            let mapping = unsafe {
-                let addr = self.page_start(load_bias + vaddr);
-                let offset = self.page_start(offset);
-                let size = file_map_size;
+            // There can very well be a section with filesz == 0
+            if file_map_size > 0 {
+                // Assumption:
+                //
+                //     page_offset(ph.p_vaddr) == page_offset(ph.p_offset)
+                //
+                // We do the following mmap for the file-backed portion:
+                let mapping = unsafe {
+                    let addr = self.page_start(load_bias + vaddr);
+                    let offset = self.page_start(offset);
+                    let size = file_map_size;
 
-                log::trace!(
-                    "mmap [{ph}] [0x{addr:x}-0x{mend:x}] (vaddr=0x{vaddr:x}, offset=0x{offset:x})",
-                    mend = addr + size,
-                    ph = DisplayPFlags(ph),
-                );
+                    log::trace!(
+                        "mmap [{ph}] [0x{addr:x}-0x{mend:x}] (vaddr=0x{vaddr:x}, offset=0x{offset:x})",
+                        mend = addr + size,
+                        ph = DisplayPFlags(ph),
+                    );
 
-                nolibc::mmap(
-                    addr as *mut c_void,
-                    size,
-                    prot,
-                    MAP_PRIVATE | MAP_FIXED,
-                    self.fd,
-                    offset.try_into().unwrap(),
-                )
-            };
+                    nolibc::mmap(
+                        addr as *mut c_void,
+                        size,
+                        prot,
+                        MAP_PRIVATE | MAP_FIXED,
+                        self.fd,
+                        offset.try_into().unwrap(),
+                    )
+                };
 
-            if mapping == MAP_FAILED {
-                log::error!("Failed to map segment 0x{:x} ({})", vaddr, nolibc::errno());
-                return Err(());
+                if mapping == MAP_FAILED {
+                    log::error!("Failed to map segment 0x{:x} ({})", vaddr, nolibc::errno());
+                    return Err(());
+                }
             }
 
             // Memory beyond memsz is zero-initialized
@@ -242,6 +245,12 @@ impl ElfHandle {
                     let mapping = unsafe {
                         let addr = load_addr.add(file_map_size);
                         let size = total_map_size - file_map_size;
+                        log::trace!(
+                            "mmap [{ph}] [{addr:?}-0x{mend:x}] (vaddr=0x{vaddr:x}, anon)",
+                            mend = addr as usize + size,
+                            ph = DisplayPFlags(ph),
+                        );
+
                         nolibc::mmap(
                             addr,
                             size,
