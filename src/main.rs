@@ -79,11 +79,22 @@ extern "C" fn real_main() -> ! {
                     }
                 }
             }
-            b"NIX_LD" | NIX_LD_SYSTEM_ENV_BYTES => {
+
+            // The system-specific variants (e.g., NIX_LD_x86_64_linux) always
+            // take precedence. Currently, NIX_LD_LIBRARY_PATH_{system} clobbers
+            // the generic one, and we should revisit this decision (maybe
+            // concatenate?).
+            NIX_LD_SYSTEM_ENV_BYTES => {
                 ctx.nix_ld = Some(env);
             }
-            b"NIX_LD_LIBRARY_PATH" | NIX_LD_LIBRARY_PATH_SYSTEM_ENV_BYTES => {
+            b"NIX_LD" => {
+                ctx.nix_ld.get_or_insert(env);
+            }
+            NIX_LD_LIBRARY_PATH_SYSTEM_ENV_BYTES => {
                 ctx.nix_ld_library_path = Some(env);
+            }
+            b"NIX_LD_LIBRARY_PATH" => {
+                ctx.nix_ld_library_path.get_or_insert(env);
             }
             b"LD_LIBRARY_PATH" => {
                 ctx.ld_library_path = Some(env);
