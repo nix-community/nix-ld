@@ -1,6 +1,7 @@
 //! Arch-specific stuff.
 
 use core::ffi::c_void;
+use core::mem;
 use core::ptr;
 
 use constcat::concat;
@@ -96,6 +97,12 @@ pub struct TrampolineContext {
 }
 
 impl TrampolineContext {
+    #[allow(unused)]
+    const ENV_ENTRY_OFFSET: usize = mem::size_of::<*const u8>();
+
+    #[allow(unused)]
+    const ENV_STRING_OFFSET: usize = mem::size_of::<*const u8>() * 2;
+
     pub fn set_elf_entry(&mut self, entry: *const c_void) {
         self.elf_entry = entry;
     }
@@ -155,8 +162,8 @@ cfg_match::cfg_match! {
                 "ldr x8, [x8]",
                 "br x8",
                 context = sym TRAMPOLINE_CONTEXT,
-                env_entry_off = const core::mem::size_of::<*const u8>(),
-                env_string_off = const core::mem::size_of::<*const u8>() * 2,
+                env_entry_off = const TrampolineContext::ENV_ENTRY_OFFSET,
+                env_string_off = const TrampolineContext::ENV_STRING_OFFSET,
                 options(noreturn),
             )
         }
