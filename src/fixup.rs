@@ -17,10 +17,6 @@ use crate::elf::{
 };
 use crate::support::explode;
 
-extern "C" {
-    fn __executable_start();
-}
-
 struct Dynamic {
     ptr: *const elf_types::dynamic::Dyn,
     load_offset: usize,
@@ -127,24 +123,35 @@ pub unsafe fn fixup_relocs(envp: *const *const u8) {
     let auxv = find_auxv(envp);
     let auxv = AuxVec::from_raw(auxv);
 
-    let load_offset = {
-        let at_base = auxv.at_base.as_ref().map_or_else(ptr::null, |v| v.value());
-        let at_phdr = auxv.at_phdr.as_ref().map_or_else(ptr::null, |v| v.value());
-        let exec_start = __executable_start as *const usize;
-
-        if !at_base.is_null() {
-            at_base as usize
-        } else if !at_phdr.is_null() {
-            at_phdr as usize - mem::size_of::<Header>()
+    let at_base = auxv.at_base.as_ref().map_or_else(ptr::null, |v| v.value());
+    let (load_offset, phs) = if at_base.is_null() {
+        // We were executed directly
+        if let (Some(phdr), Some(phent), Some(phnum)) =
+            (&auxv.at_phdr, &auxv.at_phent, &auxv.at_phnum)
+        {
+            if phdr.value().is_null() {
+                explode("AT_PHDR is null");
+            }
+            let phs = ProgramHeaders::from_raw(phdr.value(), phent.value(), phnum.value());
+            let load_offset = phdr.value() as usize - mem::size_of::<Header>();
+            (load_offset, phs)
         } else {
-            exec_start as usize
+            explode("AT_PHDR, AT_PHENT, AT_PHNUM must exist");
         }
-    };
-
-    let phs = if let Some(phs) = ProgramHeaders::from_auxv(&auxv) {
-        phs
     } else {
-        explode("Couldn't load our own headers - ld-dispatch should be used as the interpreter");
+        // We are the loader
+        let ehdr: *const Header = at_base.cast();
+        let header: &Header = unsafe { &*ehdr };
+
+        if &header.e_ident[..4] != b"\x7fELF".as_slice() {
+            explode("We are not an ELF ourselves");
+        }
+
+        let phdr = unsafe { ehdr.add(1).cast() };
+
+        let phs =
+            ProgramHeaders::from_raw(phdr, header.e_phentsize as usize, header.e_phnum as usize);
+        (at_base as usize, phs)
     };
 
     let dynamic = if let Some(dynamic) = Dynamic::from_program_headers(&phs, load_offset) {

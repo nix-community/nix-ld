@@ -11,7 +11,6 @@ use crate::arch::elf_types::{
     header::{Header, ET_DYN},
     program_header::{ProgramHeader, PF_R, PF_W, PF_X, PT_LOAD},
 };
-use crate::auxv::AuxVec;
 use crate::nolibc::{
     self, ENOENT, MAP_ANONYMOUS, MAP_FAILED, MAP_FIXED, MAP_PRIVATE, O_RDONLY, PROT_EXEC,
     PROT_NONE, PROT_READ, PROT_WRITE,
@@ -32,9 +31,9 @@ pub struct ElfMapping {
 }
 
 pub struct ProgramHeaders {
-    phdr: *const ProgramHeader,
-    phent: usize,
-    phnum: usize,
+    base: *const ProgramHeader,
+    entry_size: usize,
+    num_entries: usize,
 }
 
 pub struct ProgramHeadersIter<'ph> {
@@ -120,9 +119,9 @@ impl ElfHandle {
         let phdr = unsafe { eh_map.add(mem::size_of::<Header>()) };
 
         let phs = ProgramHeaders {
-            phdr: phdr.cast(),
-            phent: header.e_phentsize as usize,
-            phnum: header.e_phnum as usize,
+            base: phdr.cast(),
+            entry_size: header.e_phentsize as usize,
+            num_entries: header.e_phnum as usize,
         };
 
         Ok(Self {
@@ -306,51 +305,15 @@ impl ElfMapping {
 }
 
 impl ProgramHeaders {
-    /// Loads the interpreter's own program headers.
-    pub fn from_auxv(auxv: &AuxVec) -> Option<Self> {
-        let at_base = auxv.at_base.as_ref()?.value();
-
-        if at_base.is_null() {
-            // We are executed directly
-            if let (Some(phdr), Some(phent), Some(phnum)) =
-                (&auxv.at_phdr, &auxv.at_phent, &auxv.at_phnum)
-            {
-                if phdr.value().is_null() {
-                    return None;
-                }
-                Some(Self {
-                    phdr: phdr.value(),
-                    phent: phent.value(),
-                    phnum: phnum.value(),
-                })
-            } else {
-                None
-            }
-        } else {
-            // We are the loader
-            let ehdr: *const Header = at_base.cast();
-            let header: &Header = unsafe { &*ehdr };
-
-            if &header.e_ident[..4] != b"\x7fELF".as_slice() {
-                return None;
-            }
-
-            if header.e_type != ET_DYN {
-                return None;
-            }
-
-            let phsize = header.e_phentsize as usize * header.e_phnum as usize;
-            if phsize == 0 || phsize > 65536 {
-                return None;
-            }
-
-            let phdr = unsafe { ehdr.add(1).cast() };
-
-            Some(Self {
-                phdr,
-                phent: header.e_phentsize as usize,
-                phnum: header.e_phnum as usize,
-            })
+    pub unsafe fn from_raw(
+        base: *const ProgramHeader,
+        entry_size: usize,
+        num_entries: usize,
+    ) -> Self {
+        Self {
+            base,
+            entry_size,
+            num_entries,
         }
     }
 
@@ -397,12 +360,12 @@ impl<'ph> Iterator for ProgramHeadersIter<'ph> {
     type Item = &'ph ProgramHeader;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.headers.phnum {
+        if self.index >= self.headers.num_entries {
             return None;
         }
 
-        let base: *const u8 = self.headers.phdr.cast();
-        let entry_p = unsafe { base.add(self.index * self.headers.phent).cast() };
+        let base: *const u8 = self.headers.base.cast();
+        let entry_p = unsafe { base.add(self.index * self.headers.entry_size).cast() };
         let entry = unsafe { &*entry_p };
 
         self.index += 1;
