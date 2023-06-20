@@ -40,6 +40,7 @@
 
       rustTargetSpec = pkgs.rust.toRustTargetSpec pkgsCross.stdenv.hostPlatform;
       rustTargetSpecUnderscored = builtins.replaceStrings [ "-" ] [ "_" ] rustTargetSpec;
+      systemUnderscored = builtins.replaceStrings [ "-" ] [ "_" ] crossSystem;
       ccbin = "${pkgsCross.stdenv.cc}/bin/${pkgsCross.stdenv.cc.targetPrefix}cc";
     in {
       inherit rustTargetSpec;
@@ -47,6 +48,7 @@
         "CARGO_TARGET_${lib.toUpper rustTargetSpecUnderscored}_LINKER" = ccbin;
         "CC_${rustTargetSpecUnderscored}" = ccbin;
         "DEFAULT_NIX_LD_${rustTargetSpecUnderscored}" = pkgsCross.stdenv.cc.bintools.dynamicLinker;
+        "NIX_LD_${systemUnderscored}" = pkgsCross.stdenv.cc.bintools.dynamicLinker;
       };
     }) otherSystems;
 

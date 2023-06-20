@@ -189,13 +189,6 @@ trait CommandExt {
 impl CommandExt for Command {
     fn output_checked(&mut self, want_success: bool) -> (String, String) {
         eprintln!("Running binary {:?}", self.get_program());
-
-        // For cross-compiling in the devShell
-        let target_suffix = TARGET.replace('-', "_");
-        if let Ok(cross_nix_ld) = env::var(format!("DEFAULT_NIX_LD_{}", target_suffix)) {
-            self.env("NIX_LD", cross_nix_ld);
-        }
-
         let output = self.output().expect("Failed to spawn test binary");
 
         let stdout = String::from_utf8(output.stdout).expect("stdout contains non-UTF-8");
