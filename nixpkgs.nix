@@ -11,6 +11,6 @@ let
   }).defaultNix;
 in import flake.inputs.nixpkgs.outPath {
   overlays = [
-    flake.overlay
+    flake.overlays.default
   ];
 }

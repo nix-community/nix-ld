@@ -7,6 +7,7 @@ fn main() {
     cc::Build::new()
         .file("src/nolibc.c")
         .include("vendor/nolibc")
+        .flag("-fPIE")
         .flag("-ffreestanding")
         .flag("-fvisibility=hidden")
         .flag("-fno-common")
