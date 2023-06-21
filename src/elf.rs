@@ -5,12 +5,12 @@ use core::fmt;
 use core::mem;
 use core::ptr;
 
-use crate::arch::elf_jmp;
 pub use crate::arch::elf_types;
 use crate::arch::elf_types::{
     header::{Header, ET_DYN},
     program_header::{ProgramHeader, PF_R, PF_W, PF_X, PT_LOAD},
 };
+use crate::arch::{elf_jmp, EM_SELF};
 #[rustfmt::skip]
 use crate::sys::{
     self, errno, Error as IoError, File, Read,
@@ -77,6 +77,16 @@ impl ElfHandle {
         let header = Header::from_bytes(&buf);
         if &header.e_ident[..4] != b"\x7fELF".as_slice() {
             log::error!("{:?} is not an ELF", path);
+            return Err(IoError::Unknown);
+        }
+
+        if header.e_machine != EM_SELF {
+            log::error!(
+                "{:?} is for the wrong architecture (expected 0x{:x}, got 0x{:x})",
+                path,
+                EM_SELF,
+                header.e_machine
+            );
             return Err(IoError::Unknown);
         }
 

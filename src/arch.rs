@@ -23,6 +23,15 @@ cfg_match::cfg_match! {
 // Typically 16 is required
 pub const STACK_ALIGNMENT: usize = 32;
 
+pub const EM_SELF: u16 = {
+    use elf_types::header::*;
+    cfg_match::cfg_match! {
+        target_arch = "x86_64" => EM_X86_64,
+        target_arch = "x86" => EM_386,
+        target_arch = "aarch64" => EM_AARCH64,
+    }
+};
+
 pub const R_RELATIVE: u32 = {
     use elf_types::reloc::*;
     cfg_match::cfg_match! {
