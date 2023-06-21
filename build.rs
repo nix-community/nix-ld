@@ -41,7 +41,7 @@ fn main() {
         println!("cargo:rustc-env=DEFAULT_NIX_LD={}", target_default_nix_ld);
     }
 
-    if let Ok(nix_system) = env::var(format!("NIX_SYSTEM")) {
+    if let Ok(nix_system) = env::var("NIX_SYSTEM") {
         let underscored = nix_system.replace('-', "_");
         println!("cargo:rustc-env=NIX_SYSTEM={}", underscored);
     }
