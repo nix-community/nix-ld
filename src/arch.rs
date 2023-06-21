@@ -4,6 +4,7 @@ use core::ffi::c_void;
 use core::mem;
 use core::ptr;
 
+use cfg_match::cfg_match;
 use constcat::concat;
 
 use crate::args::EnvEdit;
@@ -11,7 +12,7 @@ use crate::args::EnvEdit;
 #[cfg(not(target_os = "linux"))]
 compiler_error!("Only Linux is supported");
 
-cfg_match::cfg_match! {
+cfg_match! {
     target_pointer_width = "64" => {
         pub use goblin::elf64 as elf_types;
     }
@@ -25,7 +26,7 @@ pub const STACK_ALIGNMENT: usize = 32;
 
 pub const EM_SELF: u16 = {
     use elf_types::header::*;
-    cfg_match::cfg_match! {
+    cfg_match! {
         target_arch = "x86_64" => EM_X86_64,
         target_arch = "x86" => EM_386,
         target_arch = "aarch64" => EM_AARCH64,
@@ -34,7 +35,7 @@ pub const EM_SELF: u16 = {
 
 pub const R_RELATIVE: u32 = {
     use elf_types::reloc::*;
-    cfg_match::cfg_match! {
+    cfg_match! {
         target_arch = "x86_64" => R_X86_64_RELATIVE,
         target_arch = "x86" => R_386_RELATIVE,
         target_arch = "aarch64" => R_AARCH64_RELATIVE,
@@ -43,7 +44,7 @@ pub const R_RELATIVE: u32 = {
 
 pub const NIX_SYSTEM: &str = match option_env!("NIX_SYSTEM") {
     Some(system) => system,
-    None => cfg_match::cfg_match! {
+    None => cfg_match! {
         target_arch = "x86_64" => "x86_64_linux",
         target_arch = "x86" => "i686_linux",
         target_arch = "aarch64" => "aarch64_linux",
@@ -132,7 +133,7 @@ pub static mut TRAMPOLINE_CONTEXT: TrampolineContext = TrampolineContext {
     env_string: ptr::null(),
 };
 
-cfg_match::cfg_match! {
+cfg_match! {
     not(feature = "entry_trampoline") => {
         pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = None;
     }

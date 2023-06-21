@@ -3,8 +3,6 @@
 #![no_std]
 #![no_main]
 
-//extern crate compiler_builtins;
-
 mod arch;
 mod args;
 mod auxv;
@@ -49,14 +47,12 @@ struct Context {
 }
 
 #[no_mangle]
-extern "C" fn main(argc: usize, argv: *const *const u8, envp: *const *const u8) -> ! {
-    unsafe {
-        fixup::fixup_relocs(envp);
+unsafe extern "C" fn main(argc: usize, argv: *const *const u8, envp: *const *const u8) -> ! {
+    fixup::fixup_relocs(envp);
 
-        ARGS.write(Args::new(argc, argv, envp));
-        let stack = STACK.assume_init_mut().bottom();
-        arch::main_relocate_stack!(stack, real_main);
-    }
+    ARGS.write(Args::new(argc, argv, envp));
+    let stack = STACK.assume_init_mut().bottom();
+    arch::main_relocate_stack!(stack, real_main);
 }
 
 #[no_mangle]
@@ -106,7 +102,6 @@ extern "C" fn real_main() -> ! {
     // Deal with NIX_LD
     let nix_ld = match &mut ctx.nix_ld {
         None => {
-            // Not set at all, let's add it
             log::info!("NIX_LD is not set - Falling back to default");
             DEFAULT_NIX_LD
         }
