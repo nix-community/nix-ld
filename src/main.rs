@@ -107,13 +107,6 @@ extern "C" fn real_main() -> ! {
         }
         Some(nix_ld) if nix_ld.value().is_empty() => {
             log::info!("NIX_LD is empty - Falling back to default");
-            let default_bytes = DEFAULT_NIX_LD.to_bytes();
-            ctx.nix_ld
-                .take()
-                .unwrap()
-                .edit(None, default_bytes.len(), |_, buf| {
-                    buf.copy_from_slice(default_bytes);
-                });
             DEFAULT_NIX_LD
         }
         Some(nix_ld) => {
