@@ -15,7 +15,7 @@ use core::ptr;
 use core::slice;
 
 use embedded_io as eio;
-pub use embedded_io::blocking::{Read, Write};
+pub use embedded_io::{Read, Write};
 #[rustfmt::skip]
 pub use linux_raw_sys::general::{
     O_RDONLY,
@@ -127,13 +127,13 @@ impl Write for File {
     }
 }
 
-impl eio::Io for File {
+impl eio::ErrorType for File {
     type Error = Error;
 }
 
 impl fmt::Write for File {
     fn write_str(&mut self, buf: &str) -> fmt::Result {
-        eio::blocking::Write::write(self, buf.as_bytes()).map_err(|_| fmt::Error)?;
+        eio::Write::write(self, buf.as_bytes()).map_err(|_| fmt::Error)?;
 
         Ok(())
     }
