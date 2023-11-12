@@ -15,16 +15,23 @@
     supportedSystems = [ "i686-linux" "x86_64-linux" "aarch64-linux" ];
   in flake-utils.lib.eachSystem supportedSystems (system: let
     pkgs = nixpkgs.legacyPackages.${system};
+    lib = pkgs.lib;
   in {
     packages = rec {
       nix-ld-rs = pkgs.callPackage ./package.nix {};
       default = nix-ld-rs;
     };
-    checks = import ./nixos-tests {
-      inherit pkgs;
-      nix-ld-rs = self.packages.${system}.nix-ld-rs;
-    };
-    devShell = pkgs.mkShell ({
+
+    checks = let
+      nixosTests = import ./nixos-tests {
+        inherit pkgs;
+        nix-ld-rs = self.packages.${system}.nix-ld-rs;
+      };
+      packages = lib.mapAttrs' (n: lib.nameValuePair "package-${n}") self.packages.${system};
+      devShells = lib.mapAttrs' (n: lib.nameValuePair "devShell-${n}") self.devShells.${system};
+    in nixosTests // packages // devShells;
+
+    devShells.default = pkgs.mkShell ({
       nativeBuildInputs = [
         pkgs.rustc
         pkgs.cargo-bloat
