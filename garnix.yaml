@@ -1,7 +1,0 @@
-builds:
-  include:
-    - 'packages.i686-linux.*'
-    - 'packages.x86_64-linux.*'
-    - 'packages.aarch64-linux.*'
-    - 'checks.i686-linux.*'
-    - 'checks.x86_64-linux.*'
