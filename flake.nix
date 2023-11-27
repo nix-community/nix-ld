@@ -19,7 +19,11 @@
         nix-ld_32bit = pkgs.pkgsi686Linux.callPackage ./default.nix { };
       }));
     checks = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (system:
-      self.packages.${system}.nix-ld.tests
+      let
+        inherit (nixpkgs) lib;
+        packages = lib.mapAttrs' (n: lib.nameValuePair "package-${n}") self.packages.${system};
+      in
+      packages // self.packages.${system}.nix-ld.tests
     );
   };
 }
