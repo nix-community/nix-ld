@@ -18,7 +18,7 @@ static inline void closep(const int *fd) { close(*fd); }
 #define _cleanup_close_ _cleanup_(closep)
 
 #if PTR_SIZE == 4
-#define UINTPTR_MAX
+#define UINTPTR_MAX 0xffffffff
 typedef Elf32_Ehdr Ehdr;
 typedef Elf32_Phdr Phdr;
 #elif PTR_SIZE == 8
