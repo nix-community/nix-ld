@@ -1,14 +1,12 @@
 queue_rules:
   - name: default
     merge_conditions:
-      - check-success=Evaluate flake.nix
-      - check-success=check smoketest [x86_64-linux]
-      - check-success=package default [x86_64-linux]
-      - check-success=package nix-ld [x86_64-linux]
+      - check-success=buildbot/nix-eval
 defaults:
   actions:
     queue:
       allow_merging_configuration_change: true
+      method: rebase
 pull_request_rules:
   - name: merge using the merge queue
     conditions:
