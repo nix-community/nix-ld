@@ -12,10 +12,12 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
       in
-      {
+      ({
         nix-ld = pkgs.callPackage ./default.nix { };
         default = self.packages.${system}.nix-ld;
-      });
+      } // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+        nix-ld_32bit = pkgs.pkgsi686Linux.callPackage ./default.nix { };
+      }));
     checks = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (system:
       self.packages.${system}.nix-ld.tests
     );
