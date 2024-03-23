@@ -34,6 +34,8 @@
     devShells.default = pkgs.mkShell ({
       nativeBuildInputs = [
         pkgs.rustc
+        pkgs.cargo
+        pkgs.cargo-watch
         pkgs.cargo-bloat
         pkgs.cargo-nextest
         pkgs.just
