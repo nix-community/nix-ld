@@ -1,20 +1,30 @@
-{ stdenv
-, pkgs
-, rustPlatform
-, nix-gitignore
+{
+  stdenv,
+  pkgs,
+  rustPlatform,
+  nix-gitignore,
+  enableClippy ? false,
 }:
 
 let
-  libDir = if builtins.elem stdenv.system [ "x86_64-linux" "mips64-linux" "powerpc64le-linux" ]
-           then "/lib64"
-           else "/lib";
+  libDir =
+    if
+      builtins.elem stdenv.system [
+        "x86_64-linux"
+        "mips64-linux"
+        "powerpc64le-linux"
+      ]
+    then
+      "/lib64"
+    else
+      "/lib";
 
   nix-ld-rs = rustPlatform.buildRustPackage {
     name = "nix-ld-rs";
 
     cargoLock.lockFile = ./Cargo.lock;
 
-    src = nix-gitignore.gitignoreSource [] ./.;
+    src = nix-gitignore.gitignoreSource [ ] ./.;
 
     hardeningDisable = [ "stackprotector" ];
 
@@ -40,8 +50,21 @@ let
       EOF
     '';
 
-    passthru.tests = import ./nixos-tests {
-      inherit pkgs nix-ld-rs;
-    };
+    passthru.tests = import ./nixos-tests { inherit pkgs nix-ld-rs; };
   };
-in nix-ld-rs
+in
+if enableClippy then
+  nix-ld-rs.overrideAttrs (oldAttrs: {
+    nativeBuildInputs = oldAttrs.nativeBuildInputs ++ [ pkgs.clippy ];
+    phases = [
+      "unpackPhase"
+      "patchPhase"
+      "installPhase"
+    ];
+    installPhase = ''
+      cargo clippy -- -D warnings
+      touch $out
+    '';
+  })
+else
+  nix-ld-rs

@@ -29,7 +29,11 @@
       };
       packages = lib.mapAttrs' (n: lib.nameValuePair "package-${n}") self.packages.${system};
       devShells = lib.mapAttrs' (n: lib.nameValuePair "devShell-${n}") self.devShells.${system};
-    in nixosTests // packages // devShells;
+    in nixosTests // packages // devShells // {
+      clippy = self.packages.${system}.nix-ld-rs.override {
+        enableClippy = true;
+      };
+    };
 
     devShells.default = pkgs.mkShell ({
       nativeBuildInputs = [
