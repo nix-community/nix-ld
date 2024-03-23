@@ -16,7 +16,7 @@ constcat = "0.3.0"
 default-env = "0.1.1"
 embedded-io = "0.6.1"
 goblin = { version = "0.7.1", default-features = false, features = ["elf32", "elf64"] }
-heapless = "0.7.16"
+heapless = "0.8.0"
 linux-raw-sys = { version = "0.4.3", default-features = false, features = ["no_std", "general", "errno"] }
 log = "0.4.21"
 
