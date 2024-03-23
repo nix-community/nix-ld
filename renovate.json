@@ -3,5 +3,6 @@
   "extends": [
     "config:recommended"
   ],
+  "labels": ["dependencies"],
   "lockFileMaintenance": { "enabled": true }
 }
