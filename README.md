@@ -19,6 +19,15 @@ It honors the following environment variables:
 Here `{system}` is the value of the Nix `system` with dashes replaced with underscores, like `x86_64_linux`.
 You can also run `nix-ld-rs` directly for a list.
 
+## Use in NixOS
+
+```
+{ pkgs, ... }: {
+  programs.nix-ld.enable = true;
+  programs.nix-ld.package = pkgs.nix-ld-rs;
+}
+```
+
 ## Extra functionalities
 
 - `NIX_LD_LIBRARY_PATH` doesn't affect child processes (on `x86_64-linux` and `aarch64-linux`)
