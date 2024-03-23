@@ -1,14 +1,7 @@
 queue_rules:
   - name: default
     merge_conditions:
-      - check-success=Evaluate flake.nix
-      - check-success=check basic [x86_64-linux]
-      - check-success=check devShell-default [x86_64-linux]
-      - check-success=check package-default [x86_64-linux]
-      - check-success=check package-nix-ld-rs [x86_64-linux]
-      - check-success=devShell default [x86_64-linux]
-      - check-success=package default [x86_64-linux]
-      - check-success=package nix-ld-rs [x86_64-linux]
+      - check-success=buildbot/nix-eval
 defaults:
   actions:
     queue:
@@ -20,4 +13,4 @@ pull_request_rules:
       - base=main
       - label~=merge-queue|dependencies
     actions:
-      queue: {}
+      queue:
