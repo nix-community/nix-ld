@@ -178,3 +178,8 @@ pub fn new_slice_leak(size: usize) -> Option<&'static mut [u8]> {
         Some(unsafe { slice::from_raw_parts_mut(ptr as *mut u8, size) })
     }
 }
+
+#[lang = "eh_personality"]
+#[no_mangle]
+pub extern fn rust_eh_personality() {
+}

@@ -29,7 +29,10 @@
       };
       packages = lib.mapAttrs' (n: lib.nameValuePair "package-${n}") self.packages.${system};
       devShells = lib.mapAttrs' (n: lib.nameValuePair "devShell-${n}") self.devShells.${system};
-    in nixosTests // packages // devShells // {
+    in packages //
+      devShells //
+      # test driver is broken on i686-linux
+      lib.optionalAttrs (system != "i686-linux") nixosTests // {
       clippy = self.packages.${system}.nix-ld-rs.override {
         enableClippy = true;
       };
