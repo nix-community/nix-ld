@@ -62,7 +62,7 @@ $ sudo nix-channel --update
   imports = [
     <nix-ld/modules/nix-ld.nix>
   ];
-  # The module in this repository defines a new module under (programs.nix-ld.dev) instead of (programs.nix-ld) 
+  # The module in this repository defines a new module under (programs.nix-ld.dev) instead of (programs.nix-ld)
   # to not collide with the nixpkgs version.
   programs.nix-ld.dev.enable = true;
 }
@@ -90,7 +90,7 @@ actual hostname of your system.
         # ... add this line to the rest of your configuration modules
         nix-ld.nixosModules.nix-ld
 
-        # The module in this repository defines a new module under (programs.nix-ld.dev) instead of (programs.nix-ld) 
+        # The module in this repository defines a new module under (programs.nix-ld.dev) instead of (programs.nix-ld)
         # to not collide with the nixpkgs version.
         { programs.nix-ld.dev.enable = true; }
       ];
@@ -101,7 +101,18 @@ actual hostname of your system.
 
 ## Usage
 
-After setting up the nix-ld symlink as described above, one needs to set
+nix-ld honors the following environment variables:
+
+- `NIX_LD`
+- `NIX_LD_{system}`
+- `NIX_LD_LIBRARY_PATH`
+- `NIX_LD_LIBRARY_PATH_{system}`
+- `NIX_LD_LOG` (error, warn, info, debug, trace)
+
+Here `{system}` is the value of the Nix `system` with dashes replaced with underscores, like `x86_64_linux`.
+You can also run `nix-ld-rs` directly for a list.
+
+After setting up the nix-ld symlink as described above, one needs to set at least
 `NIX_LD` and `NIX_LD_LIBRARY_PATH` to run executables. For example, this can
 be done with a `shell.nix` in a nix-shell like this:
 
@@ -129,33 +140,6 @@ variables set.
 
 To figure out what libraries a program needs, you can use `ldd` on the binary or
 set the `LD_DEBUG=libs` environment variable.
-
-<!--
-## Default Configuration for nix-ld
-
-In some scenarios, certain build systems or programs might ignore environment variables,
-which could disrupt the functioning of nix-ld.
-
-To counteract this, nix-ld implements a fallback mechanism. 
-If the `NIX_LD` environment variable is not set, 
-nix-ld will verify the existence of `/run/current-system/sw/share/nix-ld/lib/ld.so`. 
-If this file exists, it will be used, alongside `/run/current-system/sw/share/nix-ld/lib`.
-
-This behavior essentially defaults back to the NixOS configuration for nix-ld. 
-In terms of library paths, it will default to using the paths specified in `programs.nix-ld.libraries`. 
-This ensures that nix-ld can function effectively, even when its configuration 
-is not explicitly defined through the `NIX_LD` environment variable.
--->
-
-## Known Issues
-
-### LD_LIBRARY_PATH is inherited by child processes
-
-nix-ld is currently rewrites `NIX_LD_LIBRARY_PATH` to `LD_LIBRARY_PATH`. This
-can cause problems if a program loaded with this loader executes a normal
-binary, which should not get these libraries. In the future, it may be possible
-to redirect execution back to nix-ld after the actual library loader has done
-its job by changing the entry point in memory to fix this.
 
 ## FAQ
 
@@ -191,3 +175,85 @@ like this:
   exec ${pkgs.python3}/bin/python "$@"
 '')
 ```
+
+## Development
+
+The included `devShell` provides all dependencies required to build the project.
+It's recommended to set up transparent emulation using binfmt-misc so you can run tests on all supported platforms:
+
+```nix
+{
+  # x86_64-linux, i686-linux, aarch64-linux
+  boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
+}
+```
+
+Run `cargo test` or `cargo nextest run` to run the integration tests, and `just test` to run them on all supported platforms (binfmt required).
+
+## Current behavior
+
+<table>
+<thead>
+  <tr>
+    <th rowspan="2"></th>
+    <th colspan="2">Launch</th>
+    <th colspan="2">Seen by ld.so</th>
+    <th colspan="2">Seen by getenv() and children <sup>(a)</sup></th>
+  </tr>
+  <tr>
+    <th>NIX_LD_LIBRARY_PATH</th>
+    <th>LD_LIBRARY_PATH</th>
+    <th>NIX_LD_LIBRARY_PATH</th>
+    <th>LD_LIBRARY_PATH</th>
+    <th>NIX_LD_LIBRARY_PATH</th>
+    <th>LD_LIBRARY_PATH</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td>1</td>
+    <td>(unset)</td>
+    <td>(unset)</td>
+    <td>(unset)</td>
+    <td>"/run/current-system/sw/share/nix-ld/lib"</td>
+    <td>(unset)</td>
+    <td>"" <sup>(b)</sup></td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>(unset)</td>
+    <td>"/some/lib"</td>
+    <td>(unset)</td>
+    <td>"/some/lib:/run/current-system/sw/share/nix-ld/lib"</td>
+    <td>(unset)</td>
+    <td>"/some/lib"</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>"/some/nix/ld/lib"</td>
+    <td>(unset)</td>
+    <td>(unset)</td>
+    <td>"/some/nix/ld/lib"</td>
+    <td>"/some/nix/ld/lib"</td>
+    <td>(unset)</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td>"/some/nix/ld/lib"</td>
+    <td>"/some/lib"</td>
+    <td>"/some/nix/ld/lib"</td>
+    <td>"/some/lib:/some/nix/ld/lib"</td>
+    <td>"/some/nix/ld/lib"</td>
+    <td>"/some/lib"</td>
+  </tr>
+</tbody>
+</table>
+
+<sup>(a)</sup> On X86-64 and AArch64 only (see `src/arch.rs`). On other platforms, the "Seen by ld.so" state will persist.<br/>
+<sup>(b)</sup> The variable will be present but set to an empty string.<br/>
+
+## History of the project
+
+* nix-ld was originally written by [Mic92](https://github.com/Mic92) in 2020
+* [@zhaofengli](https://github.com/zhaofengli) create a new project based on the idea, called nix-ld-rs in 2023
+* Later nix-ld-rs was merged into nix-ld in 2024

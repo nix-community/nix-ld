@@ -1,29 +1,64 @@
 {
-  description = "nix-ld: run unpatched dynamic binaries on NixOS";
+  description = "Run unpatched dynamic binaries on NixOS, but this time with more Rust";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+    flake-compat = {
+      url = "github:edolstra/flake-compat";
+      flake = false;
+    };
+  };
 
-  nixConfig.extra-substituters = [ "https://cache.garnix.io" ];
-  nixConfig.extra-trusted-public-keys = [ "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=" ];
+  outputs = { self, nixpkgs, flake-utils, ... }: let
+    # System types to support.
+    supportedSystems = [ "i686-linux" "x86_64-linux" "aarch64-linux" ];
+  in flake-utils.lib.eachSystem supportedSystems (system: let
+    pkgs = nixpkgs.legacyPackages.${system};
+    lib = pkgs.lib;
+  in {
+    packages = rec {
+      nix-ld-rs = pkgs.callPackage ./package.nix {};
+      default = nix-ld-rs;
+    };
 
-  outputs = { self, nixpkgs }: {
-    nixosModules.nix-ld = import ./modules/nix-ld.nix;
-    packages = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-      in
-      ({
-        nix-ld = pkgs.callPackage ./default.nix { };
-        default = self.packages.${system}.nix-ld;
-      } // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
-        nix-ld_32bit = pkgs.pkgsi686Linux.callPackage ./default.nix { };
-      }));
-    checks = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (system:
-      let
-        inherit (nixpkgs) lib;
-        packages = lib.mapAttrs' (n: lib.nameValuePair "package-${n}") self.packages.${system};
-      in
-      packages // self.packages.${system}.nix-ld.tests
-    );
+    checks = let
+      nixosTests = import ./nixos-tests {
+        inherit pkgs;
+        nix-ld-rs = self.packages.${system}.nix-ld-rs;
+      };
+      packages = lib.mapAttrs' (n: lib.nameValuePair "package-${n}") self.packages.${system};
+      devShells = lib.mapAttrs' (n: lib.nameValuePair "devShell-${n}") self.devShells.${system};
+    in packages //
+      devShells //
+      # test driver is broken on i686-linux
+      lib.optionalAttrs (system != "i686-linux") nixosTests // {
+      clippy = self.packages.${system}.nix-ld-rs.override {
+        enableClippy = true;
+      };
+    };
+
+    devShells.default = pkgs.mkShell ({
+      nativeBuildInputs = [
+        pkgs.rustc
+        pkgs.cargo
+        pkgs.cargo-watch
+        pkgs.cargo-bloat
+        pkgs.cargo-nextest
+        pkgs.just
+      ];
+
+      hardeningDisable = [ "stackprotector" ];
+
+      # For convenience in devShell
+      DEFAULT_NIX_LD = pkgs.stdenv.cc.bintools.dynamicLinker;
+      NIX_LD = pkgs.stdenv.cc.bintools.dynamicLinker;
+
+      RUSTC_BOOTSTRAP = "1";
+    });
+  }) // {
+    overlays.default = final: prev: {
+      nix-ld-rs = final.callPackage ./package.nix { };
+    };
   };
 }
