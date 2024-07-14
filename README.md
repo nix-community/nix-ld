@@ -251,3 +251,9 @@ Run `cargo test` or `cargo nextest run` to run the integration tests, and `just 
 
 <sup>(a)</sup> On X86-64 and AArch64 only (see `src/arch.rs`). On other platforms, the "Seen by ld.so" state will persist.<br/>
 <sup>(b)</sup> The variable will be present but set to an empty string.<br/>
+
+## History of the project
+
+* nix-ld was originally written by [Mic92](https://github.com/Mic92) in 2020
+* [@zhaofengli](https://github.com/zhaofengli) create a new project based on the idea, called nix-ld-rs in 2023
+* Later nix-ld-rs was merged into nix-ld in 2024
