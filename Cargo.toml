@@ -1,10 +1,10 @@
 [package]
-name = "nix-ld-rs"
-version = "0.1.0"
+name = "nix-ld"
+version = "2.0.0"
 edition = "2021"
 
 [[bin]]
-name = "nix-ld-rs"
+name = "nix-ld"
 test = false
 
 [[test]]

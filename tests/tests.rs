@@ -117,7 +117,7 @@ fn test_ld_path_restore(libtest: &str, _dt_needed_bin: &Path) {
 
 // Utilities
 
-const EXE: &str = env!("CARGO_BIN_EXE_nix-ld-rs");
+const EXE: &str = env!("CARGO_BIN_EXE_nix-ld");
 const TARGET: &str = env!("NIX_LD_TEST_TARGET");
 
 lazy_static! {
