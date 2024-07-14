@@ -18,14 +18,14 @@
     lib = pkgs.lib;
   in {
     packages = rec {
-      nix-ld-rs = pkgs.callPackage ./package.nix {};
-      default = nix-ld-rs;
+      nix-ld = pkgs.callPackage ./package.nix {};
+      default = nix-ld;
     };
 
     checks = let
       nixosTests = import ./nixos-tests {
         inherit pkgs;
-        nix-ld-rs = self.packages.${system}.nix-ld-rs;
+        nix-ld = self.packages.${system}.nix-ld;
       };
       packages = lib.mapAttrs' (n: lib.nameValuePair "package-${n}") self.packages.${system};
       devShells = lib.mapAttrs' (n: lib.nameValuePair "devShell-${n}") self.devShells.${system};
@@ -33,7 +33,7 @@
       devShells //
       # test driver is broken on i686-linux
       lib.optionalAttrs (system != "i686-linux") nixosTests // {
-      clippy = self.packages.${system}.nix-ld-rs.override {
+      clippy = self.packages.${system}.nix-ld.override {
         enableClippy = true;
       };
     };
@@ -58,7 +58,7 @@
     });
   }) // {
     overlays.default = final: prev: {
-      nix-ld-rs = final.callPackage ./package.nix { };
+      nix-ld = final.callPackage ./package.nix { };
     };
   };
 }

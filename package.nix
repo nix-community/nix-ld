@@ -19,8 +19,8 @@ let
     else
       "/lib";
 
-  nix-ld-rs = rustPlatform.buildRustPackage {
-    name = "nix-ld-rs";
+  nix-ld = rustPlatform.buildRustPackage {
+    name = "nix-ld";
 
     cargoLock.lockFile = ./Cargo.lock;
 
@@ -37,8 +37,7 @@ let
 
     postInstall = ''
       mkdir -p $out/libexec
-      ln -s $out/bin/nix-ld-rs $out/libexec/nix-ld-rs
-      ln -s $out/bin/nix-ld-rs $out/libexec/nix-ld
+      ln -s $out/bin/nix-ld $out/libexec/nix-ld
 
       mkdir -p $out/nix-support
 
@@ -46,15 +45,15 @@ let
       echo "$ldpath" > $out/nix-support/ldpath
       mkdir -p $out/lib/tmpfiles.d/
       cat > $out/lib/tmpfiles.d/nix-ld.conf <<EOF
-        L+ $ldpath - - - - $out/libexec/nix-ld-rs
+        L+ $ldpath - - - - $out/libexec/nix-ld
       EOF
     '';
 
-    passthru.tests = import ./nixos-tests { inherit pkgs nix-ld-rs; };
+    passthru.tests = import ./nixos-tests { inherit pkgs nix-ld; };
   };
 in
 if enableClippy then
-  nix-ld-rs.overrideAttrs (oldAttrs: {
+  nix-ld.overrideAttrs (oldAttrs: {
     nativeBuildInputs = oldAttrs.nativeBuildInputs ++ [ pkgs.clippy ];
     phases = [
       "unpackPhase"
@@ -67,4 +66,4 @@ if enableClippy then
     '';
   })
 else
-  nix-ld-rs
+  nix-ld
