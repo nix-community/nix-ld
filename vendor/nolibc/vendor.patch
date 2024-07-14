@@ -1,0 +1,175 @@
+# Vendored from Linux 6.3.8 (mirror://kernel/linux/kernel/v6.x/linux-6.3.8.tar.xz)
+diff --git a/nolibc.orig/arch-aarch64.h b/nolibc/arch-aarch64.h
+index 383badd..249cf8f 100644
+--- a/nolibc.orig/arch-aarch64.h
++++ b/nolibc/arch-aarch64.h
+@@ -181,14 +181,14 @@ void __attribute__((weak,noreturn,optimize("omit-frame-pointer"))) _start(void)
+ 		"lsl x2, x0, 3\n"    // envp (x2) = 8*argc ...
+ 		"add x2, x2, 8\n"    //           + 8 (skip null)
+ 		"add x2, x2, x1\n"   //           + argv
+-		"adrp x3, environ\n"          // x3 = &environ (high bits)
+-		"str x2, [x3, #:lo12:environ]\n" // store envp into environ
++//		"adrp x3, environ\n"          // x3 = &environ (high bits)
++//		"str x2, [x3, #:lo12:environ]\n" // store envp into environ
+ 		"mov x4, x2\n"       // search for auxv (follows NULL after last env)
+ 		"0:\n"
+ 		"ldr x5, [x4], 8\n"  // x5 = *x4; x4 += 8
+ 		"cbnz x5, 0b\n"      // and stop at NULL after last env
+-		"adrp x3, _auxv\n"   // x3 = &_auxv (high bits)
+-		"str x4, [x3, #:lo12:_auxv]\n" // store x4 into _auxv
++//		"adrp x3, _auxv\n"   // x3 = &_auxv (high bits)
++//		"str x4, [x3, #:lo12:_auxv]\n" // store x4 into _auxv
+ 		"and sp, x1, -16\n"  // sp must be 16-byte aligned in the callee
+ 		"bl main\n"          // main() returns the status code, we'll exit with it.
+ 		"mov x8, 93\n"       // NR_exit == 93
+diff --git a/nolibc.orig/arch-arm.h b/nolibc/arch-arm.h
+index 42499f2..bc4d2d6 100644
+--- a/nolibc.orig/arch-arm.h
++++ b/nolibc/arch-arm.h
+@@ -209,8 +209,8 @@ void __attribute__((weak,noreturn,optimize("omit-frame-pointer"))) _start(void)
+ 		"add %r2, %r0, $1\n"          // envp = (argc + 1) ...
+ 		"lsl %r2, %r2, $2\n"          //        * 4        ...
+ 		"add %r2, %r2, %r1\n"         //        + argv
+-		"ldr %r3, 1f\n"               // r3 = &environ (see below)
+-		"str %r2, [r3]\n"             // store envp into environ
++//		"ldr %r3, 1f\n"               // r3 = &environ (see below)
++//		"str %r2, [r3]\n"             // store envp into environ
+ 
+ 		"mov r4, r2\n"                // search for auxv (follows NULL after last env)
+ 		"0:\n"
+@@ -219,8 +219,8 @@ void __attribute__((weak,noreturn,optimize("omit-frame-pointer"))) _start(void)
+ 		"ldr r5,[r5]\n"               // r5 = *r5 = *(r4-4)
+ 		"cmp r5, #0\n"                // and stop at NULL after last env
+ 		"bne 0b\n"
+-		"ldr %r3, 2f\n"               // r3 = &_auxv (low bits)
+-		"str r4, [r3]\n"              // store r4 into _auxv
++//		"ldr %r3, 2f\n"               // r3 = &_auxv (low bits)
++//		"str r4, [r3]\n"              // store r4 into _auxv
+ 
+ 		"mov %r3, $8\n"               // AAPCS : sp must be 8-byte aligned in the
+ 		"neg %r3, %r3\n"              //         callee, and bl doesn't push (lr=pc)
+@@ -232,9 +232,9 @@ void __attribute__((weak,noreturn,optimize("omit-frame-pointer"))) _start(void)
+ 		"svc $0x00\n"
+ 		".align 2\n"                  // below are the pointers to a few variables
+ 		"1:\n"
+-		".word environ\n"
++//		".word environ\n"
+ 		"2:\n"
+-		".word _auxv\n"
++//		".word _auxv\n"
+ 	);
+ 	__builtin_unreachable();
+ }
+diff --git a/nolibc.orig/arch-i386.h b/nolibc/arch-i386.h
+index e8d0cf5..9605e87 100644
+--- a/nolibc.orig/arch-i386.h
++++ b/nolibc/arch-i386.h
+@@ -194,14 +194,14 @@ void __attribute__((weak,noreturn,optimize("omit-frame-pointer"))) _start(void)
+ 		"pop %eax\n"                // argc   (first arg, %eax)
+ 		"mov %esp, %ebx\n"          // argv[] (second arg, %ebx)
+ 		"lea 4(%ebx,%eax,4),%ecx\n" // then a NULL then envp (third arg, %ecx)
+-		"mov %ecx, environ\n"       // save environ
++//		"mov %ecx, environ\n"       // save environ
+ 		"xor %ebp, %ebp\n"          // zero the stack frame
+ 		"mov %ecx, %edx\n"          // search for auxv (follows NULL after last env)
+ 		"0:\n"
+ 		"add $4, %edx\n"            // search for auxv using edx, it follows the
+ 		"cmp -4(%edx), %ebp\n"      // ... NULL after last env (ebp is zero here)
+ 		"jnz 0b\n"
+-		"mov %edx, _auxv\n"         // save it into _auxv
++//		"mov %edx, _auxv\n"         // save it into _auxv
+ 		"and $-16, %esp\n"          // x86 ABI : esp must be 16-byte aligned before
+ 		"sub $4, %esp\n"            // the call instruction (args are aligned)
+ 		"push %ecx\n"               // push all registers on the stack so that we
+diff --git a/nolibc.orig/arch-mips.h b/nolibc/arch-mips.h
+index bf83432..01a9648 100644
+--- a/nolibc.orig/arch-mips.h
++++ b/nolibc/arch-mips.h
+@@ -194,18 +194,18 @@ void __attribute__((weak,noreturn,optimize("omit-frame-pointer"))) __start(void)
+ 		"sll $a2, $a0, 2\n"     // a2 = argc * 4
+ 		"add   $a2, $a2, $a1\n" // envp = argv + 4*argc ...
+ 		"addiu $a2, $a2, 4\n"   //        ... + 4
+-		"lui $a3, %hi(environ)\n"     // load environ into a3 (hi)
+-		"addiu $a3, %lo(environ)\n"   // load environ into a3 (lo)
+-		"sw $a2,($a3)\n"              // store envp(a2) into environ
++//		"lui $a3, %hi(environ)\n"     // load environ into a3 (hi)
++//		"addiu $a3, %lo(environ)\n"   // load environ into a3 (lo)
++//		"sw $a2,($a3)\n"              // store envp(a2) into environ
+ 
+ 		"move $t0, $a2\n"             // iterate t0 over envp, look for NULL
+ 		"0:"                          // do {
+ 		"lw $a3, ($t0)\n"             //   a3=*(t0);
+ 		"bne $a3, $0, 0b\n"           // } while (a3);
+ 		"addiu $t0, $t0, 4\n"         // delayed slot: t0+=4;
+-		"lui $a3, %hi(_auxv)\n"       // load _auxv into a3 (hi)
+-		"addiu $a3, %lo(_auxv)\n"     // load _auxv into a3 (lo)
+-		"sw $t0, ($a3)\n"             // store t0 into _auxv
++//		"lui $a3, %hi(_auxv)\n"       // load _auxv into a3 (hi)
++//		"addiu $a3, %lo(_auxv)\n"     // load _auxv into a3 (lo)
++//		"sw $t0, ($a3)\n"             // store t0 into _auxv
+ 
+ 		"li $t0, -8\n"
+ 		"and $sp, $sp, $t0\n"   // sp must be 8-byte aligned
+diff --git a/nolibc.orig/arch-riscv.h b/nolibc/arch-riscv.h
+index e197fcb..cf51678 100644
+--- a/nolibc.orig/arch-riscv.h
++++ b/nolibc/arch-riscv.h
+@@ -192,11 +192,11 @@ void __attribute__((weak,noreturn,optimize("omit-frame-pointer"))) _start(void)
+ 		"ld    a4, 0(a3)\n"          //   a4 = *a3;
+ 		"add   a3, a3, "SZREG"\n"    //   a3 += sizeof(void*);
+ 		"bne   a4, zero, 0b\n"       // } while (a4);
+-		"lui   a4, %hi(_auxv)\n"     // a4 = &_auxv (high bits)
+-		"sd    a3, %lo(_auxv)(a4)\n" // store a3 into _auxv
++//		"lui   a4, %hi(_auxv)\n"     // a4 = &_auxv (high bits)
++//		"sd    a3, %lo(_auxv)(a4)\n" // store a3 into _auxv
+ 
+-		"lui a3, %hi(environ)\n"     // a3 = &environ (high bits)
+-		"sd a2,%lo(environ)(a3)\n"   // store envp(a2) into environ
++//		"lui a3, %hi(environ)\n"     // a3 = &environ (high bits)
++//		"sd a2,%lo(environ)(a3)\n"   // store envp(a2) into environ
+ 		"andi  sp,a1,-16\n"          // sp must be 16-byte aligned
+ 		"call  main\n"               // main() returns the status code, we'll exit with it.
+ 		"li a7, 93\n"                // NR_exit == 93
+diff --git a/nolibc.orig/arch-s390.h b/nolibc/arch-s390.h
+index 6b0e54e..0569cfb 100644
+--- a/nolibc.orig/arch-s390.h
++++ b/nolibc/arch-s390.h
+@@ -177,7 +177,7 @@ void __attribute__((weak,noreturn,optimize("omit-frame-pointer"))) _start(void)
+ 		"la	%r4,8(%r4)\n"		/* advance pointer */
+ 		"jnz	0b\n"			/* no -> test next pointer */
+ 						/* yes -> r4 now contains start of envp */
+-		"larl	%r1,environ\n"
++//		"larl	%r1,environ\n"
+ 		"stg	%r4,0(%r1)\n"
+ 
+ 		/* search for auxv */
+@@ -186,7 +186,7 @@ void __attribute__((weak,noreturn,optimize("omit-frame-pointer"))) _start(void)
+ 		"clg	%r0,0(%r5)\n"		/* entry zero? */
+ 		"la	%r5,8(%r5)\n"		/* advance pointer */
+ 		"jnz	1b\n"			/* no -> test next pointer */
+-		"larl	%r1,_auxv\n"		/* yes -> store value in _auxv */
++//		"larl	%r1,_auxv\n"		/* yes -> store value in _auxv */
+ 		"stg	%r5,0(%r1)\n"
+ 
+ 		"aghi	%r15,-160\n"		/* allocate new stackframe */
+diff --git a/nolibc.orig/arch-x86_64.h b/nolibc/arch-x86_64.h
+index 17f6751..62106d3 100644
+--- a/nolibc.orig/arch-x86_64.h
++++ b/nolibc/arch-x86_64.h
+@@ -194,14 +194,14 @@ void __attribute__((weak,noreturn,optimize("omit-frame-pointer"))) _start(void)
+ 		"pop %rdi\n"                // argc   (first arg, %rdi)
+ 		"mov %rsp, %rsi\n"          // argv[] (second arg, %rsi)
+ 		"lea 8(%rsi,%rdi,8),%rdx\n" // then a NULL then envp (third arg, %rdx)
+-		"mov %rdx, environ\n"       // save environ
++//		"mov %rdx, environ\n"       // save environ
+ 		"xor %ebp, %ebp\n"          // zero the stack frame
+ 		"mov %rdx, %rax\n"          // search for auxv (follows NULL after last env)
+ 		"0:\n"
+ 		"add $8, %rax\n"            // search for auxv using rax, it follows the
+ 		"cmp -8(%rax), %rbp\n"      // ... NULL after last env (rbp is zero here)
+ 		"jnz 0b\n"
+-		"mov %rax, _auxv\n"         // save it into _auxv
++//		"mov %rax, _auxv\n"         // save it into _auxv
+ 		"and $-16, %rsp\n"          // x86 ABI : esp must be 16-byte aligned before call
+ 		"call main\n"               // main() returns the status code, we'll exit with it.
+ 		"mov %eax, %edi\n"          // retrieve exit code (32 bit)
