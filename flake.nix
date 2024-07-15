@@ -38,6 +38,8 @@
       };
     };
 
+    nixosModules.nix-ld = import ./modules/nix-ld.nix {};
+
     devShells.default = pkgs.mkShell ({
       nativeBuildInputs = [
         pkgs.rustc
