@@ -135,9 +135,9 @@ checksum = "78b3ae25bc7c8c38cec158d1f2757ee79e9b3740fbc7ccf0e59e4b08d793fa89"
 
 [[package]]
 name = "linux-raw-sys"
-version = "0.6.4"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0b5399f6804fbab912acbd8878ed3532d506b7c951b8f9f164ef90fef39e3f4"
+checksum = "2a385b1be4e5c3e362ad2ffa73c392e53f031eaa5b7d648e64cd87f27f6063d7"
 
 [[package]]
 name = "log"
@@ -163,7 +163,7 @@ dependencies = [
  "goblin",
  "heapless",
  "lazy_static",
- "linux-raw-sys 0.6.4",
+ "linux-raw-sys 0.6.5",
  "log",
  "rstest",
  "tempfile",
