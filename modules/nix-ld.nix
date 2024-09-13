@@ -62,6 +62,8 @@ in
       '';
     }];
 
+    environment.ldso = "${cfg.package}/libexec/nix-ld";
+
     systemd.tmpfiles.packages = [ cfg.package ];
 
     environment.systemPackages = [ nix-ld-libraries ];
