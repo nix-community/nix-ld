@@ -19,7 +19,7 @@
         ];
       };
     testScript = { nodes, ... }: let
-      nix-ld = nodes.machine.config.programs.nix-ld.dev.package;
+      nix-ld = nodes.machine.programs.nix-ld.dev.package;
     in ''
       start_all()
       machine.succeed("hello")
