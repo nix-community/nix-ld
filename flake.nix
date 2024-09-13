@@ -1,9 +1,7 @@
 {
   description = "Run unpatched dynamic binaries on NixOS, but this time with more Rust";
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-  };
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs =
     { self, nixpkgs, ... }:
