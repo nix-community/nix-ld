@@ -146,10 +146,10 @@ cfg_match! {
                 "lea r10, [rip + {context}]",
                 "mov r11, [r10 + {size} * 1]", // .env_entry
                 "test r11, r11",
-                "jz 1f",
+                "jz 2f",
                 "mov r10, [r10 + {size} * 2]", // .env_string
                 "mov [r11], r10",
-                "1:",
+                "2:",
                 "jmp [rip + {context}]",
                 context = sym TRAMPOLINE_CONTEXT,
                 size = const core::mem::size_of::<*const u8>(),
