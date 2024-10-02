@@ -30,7 +30,7 @@ if [[ "$unpushed_commits" != "" ]]; then
 fi
 sed -i -e "s!^version = \".*\"\$!version = \"${version}\"!" Cargo.toml
 cargo build
-git add Cargo.lock
+git add Cargo.lock Cargo.toml
 nix flake check -vL
 git commit -m "bump version nix-ld ${version}"
 git tag "${version}"
