@@ -42,9 +42,10 @@
         in
         packages
         // devShells
-        //
+        // lib.optionalAttrs (system != "i686-linux") {
           # test driver is broken on i686-linux
-          lib.optionalAttrs (system != "i686-linux") nixosTests
+          inherit (nixosTests) basic;
+        }
         // {
           clippy = self.packages.${system}.nix-ld.override {
             enableClippy = true;
