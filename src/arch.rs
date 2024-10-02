@@ -165,10 +165,10 @@ cfg_match! {
             core::arch::asm!(
                 "adrp x8, {context}",
                 "ldr x9, [x8, {env_entry_off}]", // .env_entry
-                "cbz x9, 1f",
+                "cbz x9, 2f",
                 "ldr x10, [x8, {env_string_off}]", // .env_string
                 "str x10, [x9]",
-                "1:",
+                "2:",
                 "ldr x8, [x8]",
                 "br x8",
                 context = sym TRAMPOLINE_CONTEXT,
