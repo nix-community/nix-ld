@@ -152,6 +152,16 @@ extern "C" fn real_main() -> ! {
     } else {
         log::info!("Neither LD_LIBRARY_PATH or NIX_LD_LIBRARY_PATH exist - Setting default");
 
+        args
+            .add_env(
+                "LD_LIBRARY_PATH",
+                DEFAULT_NIX_LD_LIBRARY_PATH.len(),
+                |buf| {
+                    buf.copy_from_slice(DEFAULT_NIX_LD_LIBRARY_PATH);
+                },
+            )
+            .unwrap();
+
         // If the entry trampoline is available on the platform, LD_LIBRARY_PATH
         // will be replaced with an empty LD_LIBRARY_PATH when ld.so launches
         // the actual program.

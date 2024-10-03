@@ -194,6 +194,28 @@ impl Args {
         explode("The handoff function returned");
     }
 
+    /// Creates a new environment variable.
+    pub fn add_env<F>(&mut self, name: &str, value_len: usize, f: F) -> Result<*const u8, ()>
+    where
+        F: FnOnce(&mut [u8]),
+    {
+        if self.extra_env.is_some() {
+            return Err(());
+        }
+
+        let name_len = name.len();
+        let whole_len = name_len + 1 + value_len;
+        let new_buf = new_slice_leak(whole_len + 1).unwrap();
+        new_buf[..name_len].copy_from_slice(name.as_bytes());
+        new_buf[name_len] = b'=';
+        new_buf[whole_len] = 0;
+
+        f(&mut new_buf[name_len + 1..whole_len]);
+
+        self.extra_env = Some(new_buf.as_ptr());
+        Ok(new_buf.as_ptr())
+    }
+
     pub fn iter_env(&mut self) -> Option<EnvIter> {
         if self.env_iterated {
             return None;
