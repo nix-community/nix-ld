@@ -1,5 +1,4 @@
 #![feature(naked_functions)]
-#![feature(asm_const)]
 #![feature(lang_items)]
 #![no_std]
 #![no_main]
