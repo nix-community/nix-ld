@@ -58,7 +58,7 @@ impl ElfHandle {
     pub fn open(path: &CStr, page_size: usize) -> Result<Self, IoError> {
         let mut file = File::open_cstr(path).or_else(|err| {
             let path_bytes = path.to_bytes();
-            if err != errno::ENOENT || !path_bytes.ends_with(&[b'\n']) {
+            if err != errno::ENOENT || !path_bytes.ends_with(b"\n") {
                 return Err(err);
             }
 

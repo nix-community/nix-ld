@@ -135,7 +135,7 @@ extern "C" fn real_main() -> ! {
         let sep: &[u8] = if head.is_empty() || *head.last().unwrap() == b':' {
             &[]
         } else {
-            &[b':']
+            b":"
         };
         let new_len = head.len() + tail.len() + sep.len();
 
