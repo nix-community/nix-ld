@@ -39,7 +39,7 @@ fn test_hello() {
 fn test_dt_needed(libtest: &str, dt_needed_bin: &Path) {
     // First make sure it doesn't run without the library
     {
-        let (_, stderr) = Command::new(&dt_needed_bin)
+        let (_, stderr) = Command::new(dt_needed_bin)
             .env_remove("LD_LIBRARY_PATH")
             .env_remove("NIX_LD_LIBRARY_PATH")
             .must_fail();
@@ -48,7 +48,7 @@ fn test_dt_needed(libtest: &str, dt_needed_bin: &Path) {
 
     // Now it should work
     {
-        let (stdout, _) = Command::new(&dt_needed_bin)
+        let (stdout, _) = Command::new(dt_needed_bin)
             .env_remove("LD_LIBRARY_PATH")
             .env("NIX_LD_LIBRARY_PATH", libtest)
             .must_succeed();
@@ -141,7 +141,7 @@ fn get_source_file(file: &str) -> PathBuf {
 fn compile_test_lib(name: &str) {
     let cc = find_cc();
     let source_path = get_source_file(&format!("tests/lib{}.c", name));
-    let out_path = TMPDIR.path().join(&format!("lib{}.so", name));
+    let out_path = TMPDIR.path().join(format!("lib{}.so", name));
 
     let status = Command::new(cc)
         .arg("-fPIC")
