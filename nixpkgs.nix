@@ -6,10 +6,12 @@ let
     sha256 = lock.nodes.flake-compat.locked.narHash;
   };
 
-  flake = (import flake-compat {
-    src = ./..;
-  }).defaultNix;
-in import flake.inputs.nixpkgs.outPath {
+  flake =
+    (import flake-compat {
+      src = ./..;
+    }).defaultNix;
+in
+import flake.inputs.nixpkgs.outPath {
   overlays = [
     flake.overlays.default
   ];

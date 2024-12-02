@@ -1,4 +1,9 @@
-{ pkgs, lib, config, ... }:
+{
+  pkgs,
+  lib,
+  config,
+  ...
+}:
 let
   cfg = config.programs.nix-ld.dev;
 
@@ -36,15 +41,16 @@ in
 {
   meta.maintainers = [ lib.maintainers.mic92 ];
 
-
   options.programs.nix-ld.dev = {
-    enable = lib.mkEnableOption (lib.mdDoc ''nix-ld, Documentation: <https://github.com/Mic92/nix-ld>'') // {
-      default = true;
-    };
+    enable =
+      lib.mkEnableOption (lib.mdDoc ''nix-ld, Documentation: <https://github.com/Mic92/nix-ld>'')
+      // {
+        default = true;
+      };
     package = lib.mkOption {
       type = lib.types.package;
       description = lib.mdDoc "The package to be used for nix-ld.";
-      default = pkgs.callPackage ../package.nix {};
+      default = pkgs.callPackage ../package.nix { };
     };
     libraries = lib.mkOption {
       type = lib.types.listOf lib.types.package;
@@ -55,12 +61,14 @@ in
   };
 
   config = lib.mkIf config.programs.nix-ld.dev.enable {
-    assertions = [{ 
-      assertion = !config.programs.nix-ld.enable;
-      message = ''
-        nix-ld.dev cannot be enabled at the same time as nix-ld.
-      '';
-    }];
+    assertions = [
+      {
+        assertion = !config.programs.nix-ld.enable;
+        message = ''
+          nix-ld.dev cannot be enabled at the same time as nix-ld.
+        '';
+      }
+    ];
 
     environment.ldso = "${cfg.package}/libexec/nix-ld";
 
@@ -76,4 +84,3 @@ in
     };
   };
 }
-

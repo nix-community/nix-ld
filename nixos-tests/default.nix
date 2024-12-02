@@ -18,16 +18,19 @@
           '')
         ];
       };
-    testScript = { nodes, ... }: let
-      nix-ld = nodes.machine.programs.nix-ld.dev.package;
-    in ''
-      start_all()
-      machine.succeed("hello")
-      machine.succeed("ls -la /run/current-system/sw/share/nix-ld/lib/ld.so >&2")
-      machine.succeed("$(< ${nix-ld}/nix-support/ldpath) --version")
+    testScript =
+      { nodes, ... }:
+      let
+        nix-ld = nodes.machine.programs.nix-ld.dev.package;
+      in
+      ''
+        start_all()
+        machine.succeed("hello")
+        machine.succeed("ls -la /run/current-system/sw/share/nix-ld/lib/ld.so >&2")
+        machine.succeed("$(< ${nix-ld}/nix-support/ldpath) --version")
 
-      # test fallback if NIX_LD is not set
-      machine.succeed("unset NIX_LD; unset NIX_LD_LIBRARY_PATH; $(< ${nix-ld}/nix-support/ldpath) $(which hello)")
-    '';
+        # test fallback if NIX_LD is not set
+        machine.succeed("unset NIX_LD; unset NIX_LD_LIBRARY_PATH; $(< ${nix-ld}/nix-support/ldpath) $(which hello)")
+      '';
   };
 }
