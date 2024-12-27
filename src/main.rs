@@ -3,6 +3,7 @@
 #![no_std]
 #![no_main]
 #![allow(internal_features)]
+#![allow(static_mut_refs)]
 
 mod arch;
 mod args;
@@ -37,8 +38,7 @@ const DEFAULT_NIX_LD: &CStr = unsafe {
 };
 
 const DEFAULT_NIX_LD_LIBRARY_PATH: &[u8] = b"/run/current-system/sw/share/nix-ld/lib";
-const EMPTY_LD_LIBRARY_PATH_ENV: &CStr =
-    unsafe { CStr::from_bytes_with_nul_unchecked(b"LD_LIBRARY_PATH=\0") };
+const EMPTY_LD_LIBRARY_PATH_ENV: &CStr = c"LD_LIBRARY_PATH=";
 
 #[derive(Default)]
 struct Context {
@@ -151,15 +151,14 @@ extern "C" fn real_main() -> ! {
     } else {
         log::info!("Neither LD_LIBRARY_PATH or NIX_LD_LIBRARY_PATH exist - Setting default");
 
-        args
-            .add_env(
-                "LD_LIBRARY_PATH",
-                DEFAULT_NIX_LD_LIBRARY_PATH.len(),
-                |buf| {
-                    buf.copy_from_slice(DEFAULT_NIX_LD_LIBRARY_PATH);
-                },
-            )
-            .unwrap();
+        args.add_env(
+            "LD_LIBRARY_PATH",
+            DEFAULT_NIX_LD_LIBRARY_PATH.len(),
+            |buf| {
+                buf.copy_from_slice(DEFAULT_NIX_LD_LIBRARY_PATH);
+            },
+        )
+        .unwrap();
 
         // If the entry trampoline is available on the platform, LD_LIBRARY_PATH
         // will be replaced with an empty LD_LIBRARY_PATH when ld.so launches

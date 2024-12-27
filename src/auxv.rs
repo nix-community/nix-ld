@@ -126,7 +126,7 @@ impl<T: Copy> Entry<T> {
     }
 }
 
-impl<'a> BorrowedEntry<'a> {
+impl BorrowedEntry<'_> {
     fn new(entry: Entry) -> Self {
         Self {
             entry,
@@ -135,7 +135,7 @@ impl<'a> BorrowedEntry<'a> {
     }
 }
 
-impl<'a> Deref for BorrowedEntry<'a> {
+impl Deref for BorrowedEntry<'_> {
     type Target = Entry;
 
     fn deref(&self) -> &Self::Target {

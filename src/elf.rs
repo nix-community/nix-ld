@@ -386,7 +386,7 @@ impl ProgramHeaderExt for ProgramHeader {
     }
 }
 
-impl<'ph> fmt::Display for DisplayPFlags<'ph> {
+impl fmt::Display for DisplayPFlags<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let p_flags = &self.0.p_flags;
         let mut write_prot = |mask, s| {
