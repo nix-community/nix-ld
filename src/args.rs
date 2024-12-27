@@ -230,7 +230,7 @@ impl Args {
     }
 }
 
-impl<'args> Iterator for EnvIter<'args> {
+impl Iterator for EnvIter<'_> {
     type Item = VarHandle;
 
     fn next(&mut self) -> Option<Self::Item> {
