@@ -17,9 +17,9 @@ if [[ "$(git symbolic-ref --short HEAD)" != "main" ]]; then
 fi
 
 # ensure we are up-to-date
-uncommited_changes=$(git diff --compact-summary)
-if [[ -n "$uncommited_changes" ]]; then
-  echo -e "There are uncommited changes, exiting:\n${uncommited_changes}" >&2
+uncommitted_changes=$(git diff --compact-summary)
+if [[ -n "$uncommitted_changes" ]]; then
+  echo -e "There are uncommitted changes, exiting:\n${uncommitted_changes}" >&2
   exit 1
 fi
 git pull git@github.com:nix-community/nix-ld main
