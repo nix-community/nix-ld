@@ -43,18 +43,18 @@ in
 
   options.programs.nix-ld.dev = {
     enable =
-      lib.mkEnableOption (lib.mdDoc ''nix-ld, Documentation: <https://github.com/Mic92/nix-ld>'')
+      lib.mkEnableOption (''nix-ld, Documentation: <https://github.com/Mic92/nix-ld>'')
       // {
         default = true;
       };
     package = lib.mkOption {
       type = lib.types.package;
-      description = lib.mdDoc "The package to be used for nix-ld.";
+      description = "The package to be used for nix-ld.";
       default = pkgs.callPackage ../package.nix { };
     };
     libraries = lib.mkOption {
       type = lib.types.listOf lib.types.package;
-      description = lib.mdDoc "Libraries that automatically become available to all programs. The default set includes common libraries.";
+      description = "Libraries that automatically become available to all programs. The default set includes common libraries.";
       default = baseLibraries;
       defaultText = lib.literalExpression "baseLibraries derived from systemd and nix dependencies.";
     };
