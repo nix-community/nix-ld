@@ -110,7 +110,7 @@ nix-ld honors the following environment variables:
 - `NIX_LD_LOG` (error, warn, info, debug, trace)
 
 Here `{system}` is the value of the Nix `system` with dashes replaced with underscores, like `x86_64_linux`.
-You can also run `nix-ld-rs` directly for a list.
+You can also run `nix-ld` directly for a list.
 
 After setting up the nix-ld symlink as described above, one needs to set at least
 `NIX_LD` and `NIX_LD_LIBRARY_PATH` to run executables. For example, this can
