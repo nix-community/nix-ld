@@ -21,10 +21,10 @@ linux-raw-sys = { version = "0.8.0", default-features = false, features = ["no_s
 log = "0.4.26"
 
 [build-dependencies]
-cc = "1.2.15"
+cc = "1.2.16"
 
 [dev-dependencies]
-cc = "1.2.15"
+cc = "1.2.16"
 lazy_static = "1.5.0"
 rstest = { version = "0.24.0", default-features = false }
 tempfile = "3.17.1"
