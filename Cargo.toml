@@ -27,7 +27,7 @@ cc = "1.2.16"
 cc = "1.2.16"
 lazy_static = "1.5.0"
 rstest = { version = "0.25.0", default-features = false }
-tempfile = "3.19.0"
+tempfile = "3.19.1"
 
 [profile.dev]
 panic = "abort"
