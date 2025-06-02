@@ -8,23 +8,23 @@
 mod arch;
 mod args;
 mod auxv;
+mod const_concat;
 mod elf;
 mod fixup;
 mod support;
 mod sys;
 
-use core::ffi::{c_void, CStr};
+use core::ffi::{CStr, c_void};
 use core::mem::MaybeUninit;
 use core::ptr;
 
-use constcat::concat_slices;
+use crate::const_concat::concat_slices;
 
 use arch::{
     NIX_LD_LIBRARY_PATH_SYSTEM_ENV, NIX_LD_LIBRARY_PATH_SYSTEM_ENV_BYTES, NIX_LD_SYSTEM_ENV,
     NIX_LD_SYSTEM_ENV_BYTES,
 };
 use args::{Args, EnvEdit, VarHandle};
-use default_env::default_env;
 use support::StackSpace;
 
 static mut ARGS: MaybeUninit<Args> = MaybeUninit::uninit();
@@ -32,7 +32,10 @@ static mut STACK: MaybeUninit<StackSpace> = MaybeUninit::uninit();
 
 const DEFAULT_NIX_LD: &CStr = unsafe {
     CStr::from_bytes_with_nul_unchecked(concat_slices!([u8]:
-        default_env!("DEFAULT_NIX_LD", "/run/current-system/sw/share/nix-ld/lib/ld.so").as_bytes(),
+        match option_env!("DEFAULT_NIX_LD") {
+            Some(path) => path,
+            None => "/run/current-system/sw/share/nix-ld/lib/ld.so",
+        }.as_bytes(),
         b"\0"
     ))
 };
@@ -47,16 +50,18 @@ struct Context {
     ld_library_path: Option<VarHandle>,
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn main(argc: usize, argv: *const *const u8, envp: *const *const u8) -> ! {
-    fixup::fixup_relocs(envp);
+    unsafe {
+        fixup::fixup_relocs(envp);
 
-    ARGS.write(Args::new(argc, argv, envp));
-    let stack = STACK.assume_init_mut().bottom();
-    arch::main_relocate_stack!(stack, real_main);
+        ARGS.write(Args::new(argc, argv, envp));
+        let stack = STACK.assume_init_mut().bottom();
+        arch::main_relocate_stack!(stack, real_main);
+    }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn real_main() -> ! {
     let args = unsafe { ARGS.assume_init_mut() };
     let mut ctx = Context::default();
@@ -131,7 +136,7 @@ extern "C" fn real_main() -> ! {
             DEFAULT_NIX_LD_LIBRARY_PATH
         };
 
-        let sep: &[u8] = if head.is_empty() || *head.last().unwrap() == b':' {
+        let sep: &[u8] = if head.is_empty() || head.last() == Some(&b':') {
             &[]
         } else {
             b":"

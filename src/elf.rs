@@ -1,16 +1,16 @@
 //! ELF wrangling.
 
-use core::ffi::{c_void, CStr};
+use core::ffi::{CStr, c_void};
 use core::fmt;
 use core::mem;
 use core::ptr;
 
 pub use crate::arch::elf_types;
 use crate::arch::elf_types::{
-    header::{Header, ET_DYN},
-    program_header::{ProgramHeader, PF_R, PF_W, PF_X, PT_LOAD},
+    header::{ET_DYN, Header},
+    program_header::{PF_R, PF_W, PF_X, PT_LOAD, ProgramHeader},
 };
-use crate::arch::{elf_jmp, EM_SELF};
+use crate::arch::{EM_SELF, elf_jmp};
 #[rustfmt::skip]
 use crate::sys::{
     self, errno, Error as IoError, File, Read,
@@ -302,7 +302,9 @@ impl ElfMapping {
 
     /// Jumps to the entry point with a stack.
     pub unsafe fn jump_with_sp(self, sp: *const c_void) -> ! {
-        elf_jmp!(sp, self.entry_point);
+        unsafe {
+            elf_jmp!(sp, self.entry_point);
+        }
     }
 }
 

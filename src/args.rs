@@ -1,6 +1,6 @@
 //! Args wrangling.
 
-use core::ffi::{c_void, CStr};
+use core::ffi::{CStr, c_void};
 use core::mem;
 use core::slice;
 
@@ -84,16 +84,18 @@ impl CStrExt for CStr {
 
 impl Args {
     pub unsafe fn new(argc: usize, argv: *const *const u8, envp: *const *const u8) -> Self {
-        let (envc, auxv) = count_env(envp);
+        unsafe {
+            let (envc, auxv) = count_env(envp);
 
-        Self {
-            env_iterated: false,
-            argc,
-            argv,
-            envp,
-            envc,
-            auxv: AuxVec::from_raw(auxv),
-            extra_env: None,
+            Self {
+                env_iterated: false,
+                argc,
+                argv,
+                envp,
+                envc,
+                auxv: AuxVec::from_raw(auxv),
+                extra_env: None,
+            }
         }
     }
 
@@ -390,11 +392,13 @@ impl<'a> StackShifter<'a> {
 }
 
 unsafe fn count_env(envp: *const *const u8) -> (usize, *const usize) {
-    let mut envc = 0;
-    let mut cur = envp;
-    while !(*cur).is_null() {
-        cur = cur.add(1);
-        envc += 1;
+    unsafe {
+        let mut envc = 0;
+        let mut cur = envp;
+        while !(*cur).is_null() {
+            cur = cur.add(1);
+            envc += 1;
+        }
+        (envc, cur.add(1) as *const usize)
     }
-    (envc, cur.add(1) as *const usize)
 }

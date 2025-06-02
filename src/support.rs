@@ -62,7 +62,21 @@ fn panic_handler(info: &core::panic::PanicInfo) -> ! {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn __stack_chk_fail() -> ! {
+    explode("stack smashing detected");
+}
+
+// Stack canary value for stack protection. In a production system, this would
+// be randomized at startup, but for nix-ld's minimal environment, a constant
+// suffices to satisfy the linker requirements from libcompiler_builtins.
+#[unsafe(no_mangle)]
+static __stack_chk_guard: usize = 0x1234567890abcdef_u64 as usize;
+
+// On 32-bit systems, PIC code uses __stack_chk_fail_local instead of __stack_chk_fail
+// as an optimization to avoid going through the PLT
+#[cfg(target_pointer_width = "32")]
+#[unsafe(no_mangle)]
+extern "C" fn __stack_chk_fail_local() -> ! {
     explode("stack smashing detected");
 }
