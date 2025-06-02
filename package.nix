@@ -1,8 +1,8 @@
 {
+  lib,
   stdenv,
   pkgs,
   rustPlatform,
-  nix-gitignore,
   enableClippy ? false,
 }:
 
@@ -24,7 +24,17 @@ let
 
     cargoLock.lockFile = ./Cargo.lock;
 
-    src = nix-gitignore.gitignoreSource [ ] ./.;
+    src = lib.fileset.toSource {
+      root = ./.;
+      fileset = lib.fileset.unions [
+        ./src
+        ./Cargo.toml
+        ./Cargo.lock
+        ./build.rs
+        ./vendor
+        ./tests
+      ];
+    };
 
     hardeningDisable = [ "stackprotector" ];
 
