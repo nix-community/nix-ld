@@ -156,19 +156,21 @@ pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_tra
 #[cfg(target_arch = "aarch64")]
 #[naked]
 unsafe extern "C" fn entry_trampoline() -> ! {
-    core::arch::naked_asm!(
-        "adrp x8, {context}",
-        "ldr x9, [x8, {env_entry_off}]", // .env_entry
-        "cbz x9, 2f",
-        "ldr x10, [x8, {env_string_off}]", // .env_string
-        "str x10, [x9]",
-        "2:",
-        "ldr x8, [x8]",
-        "br x8",
-        context = sym TRAMPOLINE_CONTEXT,
-        env_entry_off = const TrampolineContext::ENV_ENTRY_OFFSET,
-        env_string_off = const TrampolineContext::ENV_STRING_OFFSET,
-    )
+    unsafe {
+        core::arch::naked_asm!(
+            "adrp x8, {context}",
+            "ldr x9, [x8, {env_entry_off}]", // .env_entry
+            "cbz x9, 2f",
+            "ldr x10, [x8, {env_string_off}]", // .env_string
+            "str x10, [x9]",
+            "2:",
+            "ldr x8, [x8]",
+            "br x8",
+            context = sym TRAMPOLINE_CONTEXT,
+            env_entry_off = const TrampolineContext::ENV_ENTRY_OFFSET,
+            env_string_off = const TrampolineContext::ENV_STRING_OFFSET,
+        )
+    }
 }
 
 // !!!!
