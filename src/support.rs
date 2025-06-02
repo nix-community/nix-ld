@@ -62,7 +62,7 @@ fn panic_handler(info: &core::panic::PanicInfo) -> ! {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn __stack_chk_fail() -> ! {
     explode("stack smashing detected");
 }

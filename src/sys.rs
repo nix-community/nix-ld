@@ -26,7 +26,7 @@ use heapless::Vec as ArrayVec;
 pub use linux_raw_sys::errno;
 
 #[link(name = "c_kinda", kind = "static")]
-extern "C" {
+unsafe extern "C" {
     pub fn write(fd: i32, buf: *const u8, count: usize) -> isize;
     #[must_use]
     pub fn mmap(
@@ -181,6 +181,6 @@ pub fn new_slice_leak(size: usize) -> Option<&'static mut [u8]> {
 
 #[cfg(not(test))]
 #[lang = "eh_personality"]
-#[no_mangle]
-pub extern fn rust_eh_personality() {
+#[unsafe(no_mangle)]
+pub extern "C" fn rust_eh_personality() {
 }

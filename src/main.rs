@@ -47,7 +47,7 @@ struct Context {
     ld_library_path: Option<VarHandle>,
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn main(argc: usize, argv: *const *const u8, envp: *const *const u8) -> ! {
     fixup::fixup_relocs(envp);
 
@@ -56,7 +56,7 @@ unsafe extern "C" fn main(argc: usize, argv: *const *const u8, envp: *const *con
     arch::main_relocate_stack!(stack, real_main);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn real_main() -> ! {
     let args = unsafe { ARGS.assume_init_mut() };
     let mut ctx = Context::default();
