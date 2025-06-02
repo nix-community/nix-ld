@@ -11,6 +11,7 @@
         "i686-linux"
         "x86_64-linux"
         "aarch64-linux"
+        "riscv64-linux"
       ];
       lib = nixpkgs.lib;
       forAllSystems =
@@ -30,6 +31,10 @@
           nix-ld = pkgs.callPackage ./package.nix { };
           nolibc = pkgs.callPackage ./vendor/nolibc.nix { };
           default = self.packages.${system}.nix-ld;
+
+          # Cross-compiled package for riscv64 (only available on x86_64-linux)
+        } // lib.optionalAttrs (system == "x86_64-linux") {
+          nix-ld-riscv64 = pkgs.pkgsCross.riscv64.callPackage ./package.nix { };
         }
       );
 
@@ -54,7 +59,7 @@
       );
 
       devShells = forAllSystems (
-        { pkgs, ... }:
+        { pkgs, system, ... }:
         {
           nix-ld = pkgs.mkShell {
             nativeBuildInputs = [
@@ -64,6 +69,7 @@
               pkgs.cargo-bloat
               pkgs.cargo-nextest
               pkgs.just
+
             ];
 
             hardeningDisable = [ "stackprotector" ];
@@ -73,7 +79,20 @@
             NIX_LD = pkgs.stdenv.cc.bintools.dynamicLinker;
 
             RUSTC_BOOTSTRAP = "1";
+
+            shellHook = ''
+              echo "nix-ld development environment"
+            '' + lib.optionalString (system == "x86_64-linux") ''
+              echo "Available cross-compilation shell:"
+              echo "  nix develop .#cross-riscv64  - Cross compile to riscv64"
+            '';
           };
+
+          # Default cross shell for current system
+          default = self.devShells.${system}.nix-ld;
+        } // lib.optionalAttrs (system == "x86_64-linux") {
+          # Cross compilation shell for riscv64 (only available on x86_64-linux)
+          cross-riscv64 = pkgs.pkgsCross.riscv64.callPackage ./riscv64-shell.nix { };
         }
       );
     }

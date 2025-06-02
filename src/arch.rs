@@ -26,6 +26,8 @@ pub const EM_SELF: u16 = {
     const VALUE: u16 = EM_386;
     #[cfg(target_arch = "aarch64")]
     const VALUE: u16 = EM_AARCH64;
+    #[cfg(target_arch = "riscv64")]
+    const VALUE: u16 = EM_RISCV;
     VALUE
 };
 
@@ -37,6 +39,8 @@ pub const R_RELATIVE: u32 = {
     const VALUE: u32 = R_386_RELATIVE;
     #[cfg(target_arch = "aarch64")]
     const VALUE: u32 = R_AARCH64_RELATIVE;
+    #[cfg(target_arch = "riscv64")]
+    const VALUE: u32 = R_RISCV_RELATIVE;
     VALUE
 };
 
@@ -49,6 +53,8 @@ pub const NIX_SYSTEM: &str = match option_env!("NIX_SYSTEM") {
         const VALUE: &str = "i686_linux";
         #[cfg(target_arch = "aarch64")]
         const VALUE: &str = "aarch64_linux";
+        #[cfg(target_arch = "riscv64")]
+        const VALUE: &str = "riscv64_linux";
         VALUE
     }
 };
@@ -70,6 +76,8 @@ macro_rules! main_relocate_stack {
         core::arch::asm!("mov esp, {}; call {}", in(reg) $sp, sym $func, options(noreturn));
         #[cfg(target_arch = "aarch64")]
         core::arch::asm!("mov sp, {}; bl {}", in(reg) $sp, sym $func, options(noreturn));
+        #[cfg(target_arch = "riscv64")]
+        core::arch::asm!("mv sp, {}; call {}", in(reg) $sp, sym $func, options(noreturn));
     };
 }
 pub(crate) use main_relocate_stack;
@@ -82,6 +90,8 @@ macro_rules! elf_jmp {
         core::arch::asm!("mov esp, {}; jmp {}", in(reg) $sp, in(reg) $target, options(noreturn));
         #[cfg(target_arch = "aarch64")]
         core::arch::asm!("mov sp, {}; br {}", in(reg) $sp, in(reg) $target, options(noreturn));
+        #[cfg(target_arch = "riscv64")]
+        core::arch::asm!("mv sp, {}; jr {}", in(reg) $sp, in(reg) $target, options(noreturn));
     };
 }
 pub(crate) use elf_jmp;
@@ -131,6 +141,9 @@ pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = None;
 #[cfg(target_arch = "x86_64")]
 pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_trampoline);
 
+#[cfg(target_arch = "riscv64")]
+pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_trampoline);
+
 #[cfg(target_arch = "x86_64")]
 #[naked]
 unsafe extern "C" fn entry_trampoline() -> ! {
@@ -173,6 +186,28 @@ unsafe extern "C" fn entry_trampoline() -> ! {
     }
 }
 
+#[cfg(target_arch = "riscv64")]
+#[naked]
+unsafe extern "C" fn entry_trampoline() -> ! {
+    unsafe {
+        core::arch::naked_asm!(
+            "1:",
+            "auipc t0, %pcrel_hi({context})",
+            "addi t0, t0, %pcrel_lo(1b)",
+            "ld t1, {env_entry_off}(t0)", // .env_entry
+            "beqz t1, 2f",
+            "ld t2, {env_string_off}(t0)", // .env_string
+            "sd t2, 0(t1)",
+            "2:",
+            "ld t0, 0(t0)",
+            "jr t0",
+            context = sym TRAMPOLINE_CONTEXT,
+            env_entry_off = const TrampolineContext::ENV_ENTRY_OFFSET,
+            env_string_off = const TrampolineContext::ENV_STRING_OFFSET,
+        )
+    }
+}
+
 // !!!!
 // After adding a trampoline, remember to enable test_ld_path_restore for
 // the target_arch in tests/tests.rs as well
@@ -180,6 +215,7 @@ unsafe extern "C" fn entry_trampoline() -> ! {
 #[cfg(all(
     feature = "entry_trampoline",
     not(target_arch = "x86_64"),
-    not(target_arch = "aarch64")
+    not(target_arch = "aarch64"),
+    not(target_arch = "riscv64")
 ))]
 pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = None;
