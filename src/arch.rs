@@ -5,9 +5,9 @@ use core::mem;
 use core::ptr;
 
 use cfg_match::cfg_match;
-use constcat::concat;
 
 use crate::args::EnvEdit;
+use crate::const_concat::concat;
 
 #[cfg(not(target_os = "linux"))]
 compiler_error!("Only Linux is supported");

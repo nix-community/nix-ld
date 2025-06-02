@@ -8,6 +8,7 @@
 mod arch;
 mod args;
 mod auxv;
+mod const_concat;
 mod elf;
 mod fixup;
 mod support;
@@ -17,7 +18,7 @@ use core::ffi::{CStr, c_void};
 use core::mem::MaybeUninit;
 use core::ptr;
 
-use constcat::concat_slices;
+use crate::const_concat::concat_slices;
 
 use arch::{
     NIX_LD_LIBRARY_PATH_SYSTEM_ENV, NIX_LD_LIBRARY_PATH_SYSTEM_ENV_BYTES, NIX_LD_SYSTEM_ENV,

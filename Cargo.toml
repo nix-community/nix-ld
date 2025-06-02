@@ -12,7 +12,6 @@ name = "tests"
 
 [dependencies]
 cfg-match = "0.2.1"
-constcat = "0.6.1"
 
 embedded-io = "0.6.1"
 goblin = { version = "0.9.3", default-features = false, features = [
