@@ -13,7 +13,7 @@ mod fixup;
 mod support;
 mod sys;
 
-use core::ffi::{c_void, CStr};
+use core::ffi::{CStr, c_void};
 use core::mem::MaybeUninit;
 use core::ptr;
 
@@ -49,11 +49,13 @@ struct Context {
 
 #[unsafe(no_mangle)]
 unsafe extern "C" fn main(argc: usize, argv: *const *const u8, envp: *const *const u8) -> ! {
-    fixup::fixup_relocs(envp);
+    unsafe {
+        fixup::fixup_relocs(envp);
 
-    ARGS.write(Args::new(argc, argv, envp));
-    let stack = STACK.assume_init_mut().bottom();
-    arch::main_relocate_stack!(stack, real_main);
+        ARGS.write(Args::new(argc, argv, envp));
+        let stack = STACK.assume_init_mut().bottom();
+        arch::main_relocate_stack!(stack, real_main);
+    }
 }
 
 #[unsafe(no_mangle)]

@@ -9,11 +9,10 @@ use core::slice;
 use crate::arch::R_RELATIVE;
 use crate::auxv::AuxVec;
 use crate::elf::{
-    elf_types,
+    ProgramHeaders, elf_types,
     elf_types::dynamic::{DT_NULL, DT_REL, DT_RELA, DT_RELAENT, DT_RELASZ, DT_RELENT, DT_RELSZ},
     elf_types::header::Header,
     elf_types::program_header::PT_DYNAMIC,
-    ProgramHeaders,
 };
 use crate::support::explode;
 
@@ -119,54 +118,61 @@ impl Dynamic {
 }
 
 pub unsafe fn fixup_relocs(envp: *const *const u8) {
-    // Reference: <https://gist.github.com/Amanieu/588e3f9d330019c5d39f3ce60e8e0aae>
-    let auxv = find_auxv(envp);
-    let auxv = AuxVec::from_raw(auxv);
+    unsafe {
+        // Reference: <https://gist.github.com/Amanieu/588e3f9d330019c5d39f3ce60e8e0aae>
+        let auxv = find_auxv(envp);
+        let auxv = AuxVec::from_raw(auxv);
 
-    let at_base = auxv.at_base.as_ref().map_or_else(ptr::null, |v| v.value());
-    let (load_offset, phs) = if at_base.is_null() {
-        // We were executed directly
-        if let (Some(phdr), Some(phent), Some(phnum)) =
-            (&auxv.at_phdr, &auxv.at_phent, &auxv.at_phnum)
-        {
-            if phdr.value().is_null() {
-                explode("AT_PHDR is null");
+        let at_base = auxv.at_base.as_ref().map_or_else(ptr::null, |v| v.value());
+        let (load_offset, phs) = if at_base.is_null() {
+            // We were executed directly
+            if let (Some(phdr), Some(phent), Some(phnum)) =
+                (&auxv.at_phdr, &auxv.at_phent, &auxv.at_phnum)
+            {
+                if phdr.value().is_null() {
+                    explode("AT_PHDR is null");
+                }
+                let phs = ProgramHeaders::from_raw(phdr.value(), phent.value(), phnum.value());
+                let load_offset = phdr.value() as usize - mem::size_of::<Header>();
+                (load_offset, phs)
+            } else {
+                explode("AT_PHDR, AT_PHENT, AT_PHNUM must exist");
             }
-            let phs = ProgramHeaders::from_raw(phdr.value(), phent.value(), phnum.value());
-            let load_offset = phdr.value() as usize - mem::size_of::<Header>();
-            (load_offset, phs)
         } else {
-            explode("AT_PHDR, AT_PHENT, AT_PHNUM must exist");
-        }
-    } else {
-        // We are the loader
-        let ehdr: *const Header = at_base.cast();
-        let header: &Header = unsafe { &*ehdr };
+            // We are the loader
+            let ehdr: *const Header = at_base.cast();
+            let header: &Header = &*ehdr;
 
-        if &header.e_ident[..4] != b"\x7fELF".as_slice() {
-            explode("We are not an ELF ourselves");
-        }
+            if &header.e_ident[..4] != b"\x7fELF".as_slice() {
+                explode("We are not an ELF ourselves");
+            }
 
-        let phdr = unsafe { ehdr.add(1).cast() };
+            let phdr = ehdr.add(1).cast();
 
-        let phs =
-            ProgramHeaders::from_raw(phdr, header.e_phentsize as usize, header.e_phnum as usize);
-        (at_base as usize, phs)
-    };
+            let phs = ProgramHeaders::from_raw(
+                phdr,
+                header.e_phentsize as usize,
+                header.e_phnum as usize,
+            );
+            (at_base as usize, phs)
+        };
 
-    let dynamic = if let Some(dynamic) = Dynamic::from_program_headers(&phs, load_offset) {
-        dynamic
-    } else {
-        explode("No dynamic section in own executable");
-    };
+        let dynamic = if let Some(dynamic) = Dynamic::from_program_headers(&phs, load_offset) {
+            dynamic
+        } else {
+            explode("No dynamic section in own executable");
+        };
 
-    dynamic.fixup();
+        dynamic.fixup();
+    }
 }
 
 unsafe fn find_auxv(envp: *const *const u8) -> *const usize {
-    let mut cur = envp;
-    while !(*cur).is_null() {
-        cur = cur.add(1);
+    unsafe {
+        let mut cur = envp;
+        while !(*cur).is_null() {
+            cur = cur.add(1);
+        }
+        cur.add(1) as *const usize
     }
-    cur.add(1) as *const usize
 }

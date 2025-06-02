@@ -141,7 +141,7 @@ cfg_match! {
         pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_trampoline);
 
         #[naked]
-        unsafe extern "C" fn entry_trampoline() -> ! {
+        unsafe extern "C" fn entry_trampoline() -> ! { unsafe {
             core::arch::naked_asm!(
                 "lea r10, [rip + {context}]",
                 "mov r11, [r10 + {size} * 1]", // .env_entry
@@ -154,7 +154,7 @@ cfg_match! {
                 context = sym TRAMPOLINE_CONTEXT,
                 size = const core::mem::size_of::<*const u8>(),
             )
-        }
+        }}
     }
     target_arch = "aarch64" => {
         pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_trampoline);

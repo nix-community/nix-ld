@@ -9,7 +9,7 @@
 //! This dependency may be reduced further. For memory operations,
 //! compiler-builtins provides faster implementations.
 
-use core::ffi::{c_char, c_int, c_void, CStr};
+use core::ffi::{CStr, c_char, c_int, c_void};
 use core::fmt;
 use core::ptr;
 use core::slice;
@@ -182,5 +182,4 @@ pub fn new_slice_leak(size: usize) -> Option<&'static mut [u8]> {
 #[cfg(not(test))]
 #[lang = "eh_personality"]
 #[unsafe(no_mangle)]
-pub extern "C" fn rust_eh_personality() {
-}
+pub extern "C" fn rust_eh_personality() {}
