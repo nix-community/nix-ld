@@ -4,51 +4,53 @@ use core::ffi::c_void;
 use core::mem;
 use core::ptr;
 
-use cfg_match::cfg_match;
-
 use crate::args::EnvEdit;
 use crate::const_concat::concat;
 
 #[cfg(not(target_os = "linux"))]
 compiler_error!("Only Linux is supported");
 
-cfg_match! {
-    target_pointer_width = "64" => {
-        pub use goblin::elf64 as elf_types;
-    }
-    target_pointer_width = "32" => {
-        pub use goblin::elf32 as elf_types;
-    }
-}
+#[cfg(target_pointer_width = "32")]
+pub use goblin::elf32 as elf_types;
+#[cfg(target_pointer_width = "64")]
+pub use goblin::elf64 as elf_types;
 
 // Typically 16 is required
 pub const STACK_ALIGNMENT: usize = 32;
 
 pub const EM_SELF: u16 = {
     use elf_types::header::*;
-    cfg_match! {
-        target_arch = "x86_64" => EM_X86_64,
-        target_arch = "x86" => EM_386,
-        target_arch = "aarch64" => EM_AARCH64,
-    }
+    #[cfg(target_arch = "x86_64")]
+    const VALUE: u16 = EM_X86_64;
+    #[cfg(target_arch = "x86")]
+    const VALUE: u16 = EM_386;
+    #[cfg(target_arch = "aarch64")]
+    const VALUE: u16 = EM_AARCH64;
+    VALUE
 };
 
 pub const R_RELATIVE: u32 = {
     use elf_types::reloc::*;
-    cfg_match! {
-        target_arch = "x86_64" => R_X86_64_RELATIVE,
-        target_arch = "x86" => R_386_RELATIVE,
-        target_arch = "aarch64" => R_AARCH64_RELATIVE,
-    }
+    #[cfg(target_arch = "x86_64")]
+    const VALUE: u32 = R_X86_64_RELATIVE;
+    #[cfg(target_arch = "x86")]
+    const VALUE: u32 = R_386_RELATIVE;
+    #[cfg(target_arch = "aarch64")]
+    const VALUE: u32 = R_AARCH64_RELATIVE;
+    VALUE
 };
 
 pub const NIX_SYSTEM: &str = match option_env!("NIX_SYSTEM") {
     Some(system) => system,
-    None => cfg_match! {
-        target_arch = "x86_64" => "x86_64_linux",
-        target_arch = "x86" => "i686_linux",
-        target_arch = "aarch64" => "aarch64_linux",
-    },
+    None => {
+        #[cfg(target_arch = "x86_64")]
+        const VALUE: &str = "x86_64_linux";
+        #[cfg(target_arch = "x86")]
+        const VALUE: &str = "i686_linux";
+        #[cfg(target_arch = "aarch64")]
+        const VALUE: &str = "aarch64_linux";
+        VALUE
+    }
 };
 
 pub const NIX_LD_SYSTEM_ENV: &str = concat!("NIX_LD_", NIX_SYSTEM);
@@ -62,34 +64,24 @@ pub const NIX_LD_LIBRARY_PATH_SYSTEM_ENV_BYTES: &[u8] = NIX_LD_LIBRARY_PATH_SYST
 
 macro_rules! main_relocate_stack {
     ($sp:ident, $func:ident) => {
-        cfg_match::cfg_match! {
-            target_arch = "x86_64" => {
-                core::arch::asm!("mov rsp, {}; call {}", in(reg) $sp, sym $func, options(noreturn));
-            }
-            target_arch = "x86" => {
-                core::arch::asm!("mov esp, {}; call {}", in(reg) $sp, sym $func, options(noreturn));
-            }
-            target_arch = "aarch64" => {
-                core::arch::asm!("mov sp, {}; bl {}", in(reg) $sp, sym $func, options(noreturn));
-            }
-        }
+        #[cfg(target_arch = "x86_64")]
+        core::arch::asm!("mov rsp, {}; call {}", in(reg) $sp, sym $func, options(noreturn));
+        #[cfg(target_arch = "x86")]
+        core::arch::asm!("mov esp, {}; call {}", in(reg) $sp, sym $func, options(noreturn));
+        #[cfg(target_arch = "aarch64")]
+        core::arch::asm!("mov sp, {}; bl {}", in(reg) $sp, sym $func, options(noreturn));
     };
 }
 pub(crate) use main_relocate_stack;
 
 macro_rules! elf_jmp {
     ($sp:ident, $target:expr) => {
-        cfg_match::cfg_match! {
-            target_arch = "x86_64" => {
-                core::arch::asm!("mov rsp, {}; jmp {}", in(reg) $sp, in(reg) $target, options(noreturn));
-            }
-            target_arch = "x86" => {
-                core::arch::asm!("mov esp, {}; jmp {}", in(reg) $sp, in(reg) $target, options(noreturn));
-            }
-            target_arch = "aarch64" => {
-                core::arch::asm!("mov sp, {}; br {}", in(reg) $sp, in(reg) $target, options(noreturn));
-            }
-        }
+        #[cfg(target_arch = "x86_64")]
+        core::arch::asm!("mov rsp, {}; jmp {}", in(reg) $sp, in(reg) $target, options(noreturn));
+        #[cfg(target_arch = "x86")]
+        core::arch::asm!("mov esp, {}; jmp {}", in(reg) $sp, in(reg) $target, options(noreturn));
+        #[cfg(target_arch = "aarch64")]
+        core::arch::asm!("mov sp, {}; br {}", in(reg) $sp, in(reg) $target, options(noreturn));
     };
 }
 pub(crate) use elf_jmp;
@@ -133,54 +125,59 @@ pub static mut TRAMPOLINE_CONTEXT: TrampolineContext = TrampolineContext {
     env_string: ptr::null(),
 };
 
-cfg_match! {
-    not(feature = "entry_trampoline") => {
-        pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = None;
-    }
-    target_arch = "x86_64" => {
-        pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_trampoline);
+#[cfg(not(feature = "entry_trampoline"))]
+pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = None;
 
-        #[naked]
-        unsafe extern "C" fn entry_trampoline() -> ! { unsafe {
-            core::arch::naked_asm!(
-                "lea r10, [rip + {context}]",
-                "mov r11, [r10 + {size} * 1]", // .env_entry
-                "test r11, r11",
-                "jz 2f",
-                "mov r10, [r10 + {size} * 2]", // .env_string
-                "mov [r11], r10",
-                "2:",
-                "jmp [rip + {context}]",
-                context = sym TRAMPOLINE_CONTEXT,
-                size = const core::mem::size_of::<*const u8>(),
-            )
-        }}
-    }
-    target_arch = "aarch64" => {
-        pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_trampoline);
+#[cfg(target_arch = "x86_64")]
+pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_trampoline);
 
-        #[naked]
-        unsafe extern "C" fn entry_trampoline() -> ! {
-            core::arch::naked_asm!(
-                "adrp x8, {context}",
-                "ldr x9, [x8, {env_entry_off}]", // .env_entry
-                "cbz x9, 2f",
-                "ldr x10, [x8, {env_string_off}]", // .env_string
-                "str x10, [x9]",
-                "2:",
-                "ldr x8, [x8]",
-                "br x8",
-                context = sym TRAMPOLINE_CONTEXT,
-                env_entry_off = const TrampolineContext::ENV_ENTRY_OFFSET,
-                env_string_off = const TrampolineContext::ENV_STRING_OFFSET,
-            )
-        }
-    }
-    // !!!!
-    // After adding a trampoline, remember to enable test_ld_path_restore for
-    // the target_arch in tests/tests.rs as well
-    // !!!!
-    _ => {
-        pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = None;
+#[cfg(target_arch = "x86_64")]
+#[naked]
+unsafe extern "C" fn entry_trampoline() -> ! {
+    unsafe {
+        core::arch::naked_asm!(
+            "lea r10, [rip + {context}]",
+            "mov r11, [r10 + {size} * 1]", // .env_entry
+            "test r11, r11",
+            "jz 2f",
+            "mov r10, [r10 + {size} * 2]", // .env_string
+            "mov [r11], r10",
+            "2:",
+            "jmp [rip + {context}]",
+            context = sym TRAMPOLINE_CONTEXT,
+            size = const core::mem::size_of::<*const u8>(),
+        )
     }
 }
+
+#[cfg(target_arch = "aarch64")]
+pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_trampoline);
+
+#[cfg(target_arch = "aarch64")]
+#[naked]
+unsafe extern "C" fn entry_trampoline() -> ! {
+    core::arch::naked_asm!(
+        "adrp x8, {context}",
+        "ldr x9, [x8, {env_entry_off}]", // .env_entry
+        "cbz x9, 2f",
+        "ldr x10, [x8, {env_string_off}]", // .env_string
+        "str x10, [x9]",
+        "2:",
+        "ldr x8, [x8]",
+        "br x8",
+        context = sym TRAMPOLINE_CONTEXT,
+        env_entry_off = const TrampolineContext::ENV_ENTRY_OFFSET,
+        env_string_off = const TrampolineContext::ENV_STRING_OFFSET,
+    )
+}
+
+// !!!!
+// After adding a trampoline, remember to enable test_ld_path_restore for
+// the target_arch in tests/tests.rs as well
+// !!!!
+#[cfg(all(
+    feature = "entry_trampoline",
+    not(target_arch = "x86_64"),
+    not(target_arch = "aarch64")
+))]
+pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = None;
