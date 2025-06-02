@@ -24,7 +24,6 @@ use arch::{
     NIX_LD_SYSTEM_ENV_BYTES,
 };
 use args::{Args, EnvEdit, VarHandle};
-use default_env::default_env;
 use support::StackSpace;
 
 static mut ARGS: MaybeUninit<Args> = MaybeUninit::uninit();
@@ -32,7 +31,10 @@ static mut STACK: MaybeUninit<StackSpace> = MaybeUninit::uninit();
 
 const DEFAULT_NIX_LD: &CStr = unsafe {
     CStr::from_bytes_with_nul_unchecked(concat_slices!([u8]:
-        default_env!("DEFAULT_NIX_LD", "/run/current-system/sw/share/nix-ld/lib/ld.so").as_bytes(),
+        match option_env!("DEFAULT_NIX_LD") {
+            Some(path) => path,
+            None => "/run/current-system/sw/share/nix-ld/lib/ld.so",
+        }.as_bytes(),
         b"\0"
     ))
 };
@@ -133,7 +135,7 @@ extern "C" fn real_main() -> ! {
             DEFAULT_NIX_LD_LIBRARY_PATH
         };
 
-        let sep: &[u8] = if head.is_empty() || *head.last().unwrap() == b':' {
+        let sep: &[u8] = if head.is_empty() || head.last() == Some(&b':') {
             &[]
         } else {
             b":"
