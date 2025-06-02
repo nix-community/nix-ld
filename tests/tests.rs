@@ -2,8 +2,8 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use lazy_static::lazy_static;
 use rstest::*;
+use std::sync::OnceLock;
 use tempfile::TempDir;
 
 #[fixture]
@@ -13,7 +13,7 @@ fn libtest() -> &'static str {
 
     eprintln!("Building libtest");
     compile_test_lib("test");
-    TMPDIR.path().to_str().unwrap()
+    get_tmpdir().path().to_str().unwrap()
 }
 
 #[fixture]
@@ -120,8 +120,10 @@ fn test_ld_path_restore(libtest: &str, _dt_needed_bin: &Path) {
 const EXE: &str = env!("CARGO_BIN_EXE_nix-ld");
 const TARGET: &str = env!("NIX_LD_TEST_TARGET");
 
-lazy_static! {
-    static ref TMPDIR: TempDir = tempfile::tempdir().expect("Failed to create temporary directory");
+static TMPDIR: OnceLock<TempDir> = OnceLock::new();
+
+fn get_tmpdir() -> &'static TempDir {
+    TMPDIR.get_or_init(|| tempfile::tempdir().expect("Failed to create temporary directory"))
 }
 
 fn find_cc() -> String {
@@ -141,7 +143,7 @@ fn get_source_file(file: &str) -> PathBuf {
 fn compile_test_lib(name: &str) {
     let cc = find_cc();
     let source_path = get_source_file(&format!("tests/lib{}.c", name));
-    let out_path = TMPDIR.path().join(format!("lib{}.so", name));
+    let out_path = get_tmpdir().path().join(format!("lib{}.so", name));
 
     let status = Command::new(cc)
         .arg("-fPIC")
@@ -158,9 +160,9 @@ fn compile_test_lib(name: &str) {
 fn compile_test_bin(name: &str, libs: &[&str]) -> PathBuf {
     let cc = find_cc();
     let source_path = get_source_file(&format!("tests/{}.c", name));
-    let out_path = TMPDIR.path().join(name);
+    let out_path = get_tmpdir().path().join(name);
 
-    let out_dir_arg = format!("-DOUT_DIR=\"{}\"", TMPDIR.path().to_str().unwrap());
+    let out_dir_arg = format!("-DOUT_DIR=\"{}\"", get_tmpdir().path().to_str().unwrap());
     let dynamic_linker_arg = format!("-Wl,--dynamic-linker,{}", EXE);
 
     let status = Command::new(cc)
@@ -169,7 +171,7 @@ fn compile_test_bin(name: &str, libs: &[&str]) -> PathBuf {
         .arg(out_dir_arg)
         .arg(dynamic_linker_arg)
         .arg("-L")
-        .arg(TMPDIR.path())
+        .arg(get_tmpdir().path())
         .args(libs.iter().map(|l| format!("-l{}", l)))
         .arg(source_path)
         .status()
