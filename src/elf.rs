@@ -76,7 +76,7 @@ impl ElfHandle {
 
         let header = Header::from_bytes(&buf);
         if &header.e_ident[..4] != b"\x7fELF".as_slice() {
-            log::error!("{:?} is not an ELF", path);
+            log::error!("{path:?} is not an ELF");
             return Err(IoError::Unknown);
         }
 
@@ -91,13 +91,13 @@ impl ElfHandle {
         }
 
         if header.e_type != ET_DYN {
-            log::error!("{:?} is not a dynamic library", path);
+            log::error!("{path:?} is not a dynamic library");
             return Err(IoError::Unknown);
         }
 
         let phsize = header.e_phentsize as usize * header.e_phnum as usize;
         if phsize == 0 || phsize > 65536 {
-            log::error!("{:?} has incorrect program header size {}", path, phsize);
+            log::error!("{path:?} has incorrect program header size {phsize}");
             return Err(IoError::Unknown);
         }
 
@@ -168,15 +168,14 @@ impl ElfHandle {
         let entry_point = (load_bias + self.entry_point_v) as *const c_void;
 
         log::debug!("   Total Size: 0x{:x}", summary.total_mapping_size);
-        log::debug!("    Load Addr: {:x?}", load_addr);
+        log::debug!("    Load Addr: {load_addr:x?}");
         log::debug!("  First Vaddr: 0x{:x?}", summary.first_vaddr);
-        log::debug!("    Load Bias: 0x{:x?}", load_bias);
-        log::debug!("  Entry Point: 0x{:x?}", entry_point);
+        log::debug!("    Load Bias: 0x{load_bias:x?}");
+        log::debug!("  Entry Point: 0x{entry_point:x?}");
         log::debug!("    Page Size: {}", self.page_size);
 
         log::debug!(
-            "GDB: add-symbol-file /path/to/ld.so.symbols 0x{:x}",
-            load_bias
+            "GDB: add-symbol-file /path/to/ld.so.symbols 0x{load_bias:x}"
         );
 
         for ph in self.phs.iter() {
@@ -263,7 +262,7 @@ impl ElfHandle {
                     };
 
                     if mapping == MAP_FAILED {
-                        log::error!("Failed to map anonymous portion for segment 0x{:x}", vaddr);
+                        log::error!("Failed to map anonymous portion for segment 0x{vaddr:x}");
                         return Err(());
                     }
                 }
@@ -393,7 +392,7 @@ impl fmt::Display for DisplayPFlags<'_> {
         let p_flags = &self.0.p_flags;
         let mut write_prot = |mask, s| {
             if p_flags & mask != 0 {
-                write!(f, "{}", s)
+                write!(f, "{s}")
             } else {
                 write!(f, " ")
             }

@@ -33,17 +33,17 @@ fn main() {
     let target = env::var("TARGET").unwrap();
 
     // For Cargo integration tests
-    println!("cargo:rustc-env=NIX_LD_TEST_TARGET={}", target);
+    println!("cargo:rustc-env=NIX_LD_TEST_TARGET={target}");
 
     // For cross-compiling in the devShell *only*
     let target_suffix = target.replace('-', "_");
-    if let Ok(target_default_nix_ld) = env::var(format!("DEFAULT_NIX_LD_{}", target_suffix)) {
-        println!("cargo:rustc-env=DEFAULT_NIX_LD={}", target_default_nix_ld);
+    if let Ok(target_default_nix_ld) = env::var(format!("DEFAULT_NIX_LD_{target_suffix}")) {
+        println!("cargo:rustc-env=DEFAULT_NIX_LD={target_default_nix_ld}");
     }
 
     if let Ok(nix_system) = env::var("NIX_SYSTEM") {
         let underscored = nix_system.replace('-', "_");
-        println!("cargo:rustc-env=NIX_SYSTEM={}", underscored);
+        println!("cargo:rustc-env=NIX_SYSTEM={underscored}");
     }
 
     //let out_dir = std::env::var("OUT_DIR").unwrap();
