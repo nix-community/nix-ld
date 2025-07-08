@@ -145,7 +145,7 @@ pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_tra
 pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_trampoline);
 
 #[cfg(target_arch = "x86_64")]
-#[naked]
+#[unsafe(naked)]
 unsafe extern "C" fn entry_trampoline() -> ! {
     unsafe {
         core::arch::naked_asm!(
@@ -167,7 +167,7 @@ unsafe extern "C" fn entry_trampoline() -> ! {
 pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_trampoline);
 
 #[cfg(target_arch = "aarch64")]
-#[naked]
+#[unsafe(naked)]
 unsafe extern "C" fn entry_trampoline() -> ! {
     unsafe {
         core::arch::naked_asm!(
@@ -187,7 +187,7 @@ unsafe extern "C" fn entry_trampoline() -> ! {
 }
 
 #[cfg(target_arch = "riscv64")]
-#[naked]
+#[unsafe(naked)]
 unsafe extern "C" fn entry_trampoline() -> ! {
     unsafe {
         core::arch::naked_asm!(
