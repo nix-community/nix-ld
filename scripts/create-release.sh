@@ -62,7 +62,7 @@ pr_url=$(gh pr create \
 pr_number=$(echo "$pr_url" | grep -oE '[0-9]+$')
 
 # Enable auto-merge with specific merge method and delete branch
-gh pr merge "$pr_number" --auto --merge --delete-branch
+gh pr merge "$pr_number" --auto --merge
 git checkout main
 
 waitForPr "release-${version}"
