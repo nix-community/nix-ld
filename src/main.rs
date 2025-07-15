@@ -1,4 +1,3 @@
-#![feature(naked_functions)]
 #![feature(lang_items)]
 #![no_std]
 #![no_main]
@@ -77,7 +76,7 @@ extern "C" fn real_main() -> ! {
                     if let Ok(level) = log_level.parse::<log::LevelFilter>() {
                         log::set_max_level(level);
                     } else {
-                        log::warn!("Unknown log level {}", log_level);
+                        log::warn!("Unknown log level {log_level}");
                     }
                 }
             }
@@ -117,7 +116,7 @@ extern "C" fn real_main() -> ! {
         }
         Some(nix_ld) => {
             let cstr = nix_ld.value_cstr();
-            log::info!("NIX_LD is set to {:?}", cstr);
+            log::info!("NIX_LD is set to {cstr:?}");
             cstr
         }
     };
@@ -184,7 +183,7 @@ extern "C" fn real_main() -> ! {
         .expect("AT_PAGESZ must exist")
         .value();
 
-    log::info!("Loading {:?}", nix_ld);
+    log::info!("Loading {nix_ld:?}");
     let loader = elf::ElfHandle::open(nix_ld, pagesz).unwrap();
     let loader_map = loader.map().unwrap();
 
@@ -201,14 +200,14 @@ extern "C" fn real_main() -> ! {
             // We were executed directly - execve the actual loader
             if args.argc() <= 1 {
                 log::warn!("Environment honored by nix-ld:");
-                log::warn!("- NIX_LD, {}", NIX_LD_SYSTEM_ENV);
-                log::warn!("- NIX_LD_LIBRARY_PATH, {}", NIX_LD_LIBRARY_PATH_SYSTEM_ENV);
+                log::warn!("- NIX_LD, {NIX_LD_SYSTEM_ENV}");
+                log::warn!("- NIX_LD_LIBRARY_PATH, {NIX_LD_LIBRARY_PATH_SYSTEM_ENV}");
                 log::warn!("- NIX_LD_LOG (error, warn, info, debug, trace)");
-                log::warn!("Default ld.so: {:?}", DEFAULT_NIX_LD);
+                log::warn!("Default ld.so: {DEFAULT_NIX_LD:?}");
             }
 
             args.handoff(|start| unsafe {
-                log::debug!("Start context: {:#?}", start);
+                log::debug!("Start context: {start:#?}");
                 sys::execve(nix_ld.as_ptr(), start.argv, start.envp);
                 sys::abort();
             });
@@ -237,7 +236,7 @@ extern "C" fn real_main() -> ! {
     }
 
     args.handoff(|start| unsafe {
-        log::debug!("Start context: {:#?}", start);
+        log::debug!("Start context: {start:#?}");
 
         if arch::ENTRY_TRAMPOLINE.is_some() {
             if let Some(extra_env) = start.extra_env {

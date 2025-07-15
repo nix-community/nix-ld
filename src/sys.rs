@@ -181,5 +181,4 @@ pub fn new_slice_leak(size: usize) -> Option<&'static mut [u8]> {
 
 #[cfg(not(test))]
 #[lang = "eh_personality"]
-#[unsafe(no_mangle)]
 pub extern "C" fn rust_eh_personality() {}

@@ -68,6 +68,7 @@
               pkgs.cargo-watch
               pkgs.cargo-bloat
               pkgs.cargo-nextest
+              pkgs.clippy
               pkgs.just
 
             ];

@@ -9,7 +9,7 @@ use tempfile::TempDir;
 #[fixture]
 #[once]
 fn libtest() -> &'static str {
-    eprintln!("Testing {} on {}", EXE, TARGET);
+    eprintln!("Testing {EXE} on {TARGET}");
 
     eprintln!("Building libtest");
     compile_test_lib("test");
@@ -60,7 +60,7 @@ fn test_dt_needed(libtest: &str, dt_needed_bin: &Path) {
 #[rstest]
 fn test_dlopen(libtest: &str) {
     let bin = compile_test_bin("dlopen", &[]);
-    eprintln!("test_dlopen: {}", libtest);
+    eprintln!("test_dlopen: {libtest}");
 
     // First make sure it doesn't run without the library
     {
@@ -94,7 +94,7 @@ fn test_dlopen(libtest: &str) {
 fn test_ld_path_restore(libtest: &str, _dt_needed_bin: &Path) {
     let bin = compile_test_bin("ld-path-restore", &["test"]);
 
-    let nix_ld_path = format!("{}:POISON", libtest);
+    let nix_ld_path = format!("{libtest}:POISON");
 
     // First try without LD_LIBRARY_PATH
     {
@@ -132,7 +132,7 @@ fn get_tmpdir() -> &'static TempDir {
 
 fn find_cc() -> String {
     let target_suffix = TARGET.replace('-', "_");
-    env::var(format!("CC_{}", target_suffix))
+    env::var(format!("CC_{target_suffix}"))
         .or_else(|_| env::var("CC"))
         .unwrap_or_else(|_| "cc".to_string())
 }
@@ -146,8 +146,8 @@ fn get_source_file(file: &str) -> PathBuf {
 
 fn compile_test_lib(name: &str) {
     let cc = find_cc();
-    let source_path = get_source_file(&format!("tests/lib{}.c", name));
-    let out_path = get_tmpdir().path().join(format!("lib{}.so", name));
+    let source_path = get_source_file(&format!("tests/lib{name}.c"));
+    let out_path = get_tmpdir().path().join(format!("lib{name}.so"));
 
     let status = Command::new(cc)
         .arg("-fPIC")
@@ -158,16 +158,16 @@ fn compile_test_lib(name: &str) {
         .status()
         .expect("Failed to spawn compiler");
 
-    assert!(status.success(), "Failed to build test library {}", name);
+    assert!(status.success(), "Failed to build test library {name}");
 }
 
 fn compile_test_bin(name: &str, libs: &[&str]) -> PathBuf {
     let cc = find_cc();
-    let source_path = get_source_file(&format!("tests/{}.c", name));
+    let source_path = get_source_file(&format!("tests/{name}.c"));
     let out_path = get_tmpdir().path().join(name);
 
     let out_dir_arg = format!("-DOUT_DIR=\"{}\"", get_tmpdir().path().to_str().unwrap());
-    let dynamic_linker_arg = format!("-Wl,--dynamic-linker,{}", EXE);
+    let dynamic_linker_arg = format!("-Wl,--dynamic-linker,{EXE}");
 
     let status = Command::new(cc)
         .arg("-o")
@@ -176,12 +176,12 @@ fn compile_test_bin(name: &str, libs: &[&str]) -> PathBuf {
         .arg(dynamic_linker_arg)
         .arg("-L")
         .arg(get_tmpdir().path())
-        .args(libs.iter().map(|l| format!("-l{}", l)))
+        .args(libs.iter().map(|l| format!("-l{l}")))
         .arg(source_path)
         .status()
         .expect("Failed to spawn compiler");
 
-    assert!(status.success(), "Failed to build test binary {}", name);
+    assert!(status.success(), "Failed to build test binary {name}");
 
     out_path
 }
@@ -200,8 +200,8 @@ impl CommandExt for Command {
         let stdout = String::from_utf8(output.stdout).expect("stdout contains non-UTF-8");
         let stderr = String::from_utf8(output.stderr).expect("stderr contains non-UTF-8");
 
-        print!("{}", stdout);
-        eprint!("{}", stderr);
+        print!("{stdout}");
+        eprint!("{stderr}");
 
         if want_success {
             assert!(

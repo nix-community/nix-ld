@@ -145,67 +145,61 @@ pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_tra
 pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_trampoline);
 
 #[cfg(target_arch = "x86_64")]
-#[naked]
+#[unsafe(naked)]
 unsafe extern "C" fn entry_trampoline() -> ! {
-    unsafe {
-        core::arch::naked_asm!(
-            "lea r10, [rip + {context}]",
-            "mov r11, [r10 + {size} * 1]", // .env_entry
-            "test r11, r11",
-            "jz 2f",
-            "mov r10, [r10 + {size} * 2]", // .env_string
-            "mov [r11], r10",
-            "2:",
-            "jmp [rip + {context}]",
-            context = sym TRAMPOLINE_CONTEXT,
-            size = const core::mem::size_of::<*const u8>(),
-        )
-    }
+    core::arch::naked_asm!(
+        "lea r10, [rip + {context}]",
+        "mov r11, [r10 + {size} * 1]", // .env_entry
+        "test r11, r11",
+        "jz 2f",
+        "mov r10, [r10 + {size} * 2]", // .env_string
+        "mov [r11], r10",
+        "2:",
+        "jmp [rip + {context}]",
+        context = sym TRAMPOLINE_CONTEXT,
+        size = const core::mem::size_of::<*const u8>(),
+    )
 }
 
 #[cfg(target_arch = "aarch64")]
 pub const ENTRY_TRAMPOLINE: Option<unsafe extern "C" fn() -> !> = Some(entry_trampoline);
 
 #[cfg(target_arch = "aarch64")]
-#[naked]
+#[unsafe(naked)]
 unsafe extern "C" fn entry_trampoline() -> ! {
-    unsafe {
-        core::arch::naked_asm!(
-            "adrp x8, {context}",
-            "ldr x9, [x8, {env_entry_off}]", // .env_entry
-            "cbz x9, 2f",
-            "ldr x10, [x8, {env_string_off}]", // .env_string
-            "str x10, [x9]",
-            "2:",
-            "ldr x8, [x8]",
-            "br x8",
-            context = sym TRAMPOLINE_CONTEXT,
-            env_entry_off = const TrampolineContext::ENV_ENTRY_OFFSET,
-            env_string_off = const TrampolineContext::ENV_STRING_OFFSET,
-        )
-    }
+    core::arch::naked_asm!(
+        "adrp x8, {context}",
+        "ldr x9, [x8, {env_entry_off}]", // .env_entry
+        "cbz x9, 2f",
+        "ldr x10, [x8, {env_string_off}]", // .env_string
+        "str x10, [x9]",
+        "2:",
+        "ldr x8, [x8]",
+        "br x8",
+        context = sym TRAMPOLINE_CONTEXT,
+        env_entry_off = const TrampolineContext::ENV_ENTRY_OFFSET,
+        env_string_off = const TrampolineContext::ENV_STRING_OFFSET,
+    )
 }
 
 #[cfg(target_arch = "riscv64")]
-#[naked]
+#[unsafe(naked)]
 unsafe extern "C" fn entry_trampoline() -> ! {
-    unsafe {
-        core::arch::naked_asm!(
-            "1:",
-            "auipc t0, %pcrel_hi({context})",
-            "addi t0, t0, %pcrel_lo(1b)",
-            "ld t1, {env_entry_off}(t0)", // .env_entry
-            "beqz t1, 2f",
-            "ld t2, {env_string_off}(t0)", // .env_string
-            "sd t2, 0(t1)",
-            "2:",
-            "ld t0, 0(t0)",
-            "jr t0",
-            context = sym TRAMPOLINE_CONTEXT,
-            env_entry_off = const TrampolineContext::ENV_ENTRY_OFFSET,
-            env_string_off = const TrampolineContext::ENV_STRING_OFFSET,
-        )
-    }
+    core::arch::naked_asm!(
+        "1:",
+        "auipc t0, %pcrel_hi({context})",
+        "addi t0, t0, %pcrel_lo(1b)",
+        "ld t1, {env_entry_off}(t0)", // .env_entry
+        "beqz t1, 2f",
+        "ld t2, {env_string_off}(t0)", // .env_string
+        "sd t2, 0(t1)",
+        "2:",
+        "ld t0, 0(t0)",
+        "jr t0",
+        context = sym TRAMPOLINE_CONTEXT,
+        env_entry_off = const TrampolineContext::ENV_ENTRY_OFFSET,
+        env_string_off = const TrampolineContext::ENV_STRING_OFFSET,
+    )
 }
 
 // !!!!

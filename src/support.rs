@@ -55,7 +55,7 @@ pub fn explode(s: &str) -> ! {
 #[panic_handler]
 fn panic_handler(info: &core::panic::PanicInfo) -> ! {
     let mut stderr = sys::stderr();
-    writeln!(stderr, "[nix-ld] FATAL: {}", info).unwrap();
+    writeln!(stderr, "[nix-ld] FATAL: {info}").unwrap();
 
     unsafe {
         sys::abort();
