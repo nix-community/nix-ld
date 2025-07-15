@@ -68,5 +68,5 @@ git checkout main
 waitForPr "release-${version}"
 git pull git@github.com:nix-community/nix-ld main
 git tag "${version}"
-git push --tags origin
+git push origin "${version}"
 gh release create "${version}" --draft --title "${version}" --notes ""
