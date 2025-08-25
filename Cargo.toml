@@ -16,7 +16,7 @@ goblin = { version = "0.10.0", default-features = false, features = [
     "elf32",
     "elf64",
 ] }
-heapless = "0.8.0"
+heapless = "0.9.1"
 linux-raw-sys = { version = "0.10.0", default-features = false, features = [
     "no_std",
     "general",
