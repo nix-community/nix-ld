@@ -192,6 +192,7 @@ impl ElfHandle {
 
             let prot = ph.prot_flags();
 
+            let seg_page_start = self.page_start(load_bias + vaddr);
             let total_map_size = self.page_align(vend) - self.page_start(vaddr);
             let file_map_size =
                 self.page_align(core::cmp::min(fend, vend)) - self.page_start(vaddr);
@@ -204,18 +205,18 @@ impl ElfHandle {
                 //
                 // We do the following mmap for the file-backed portion:
                 let mapping = unsafe {
-                    let addr = self.page_start(load_bias + vaddr);
                     let offset = self.page_start(offset);
                     let size = file_map_size;
 
                     log::trace!(
-                        "mmap [{ph}] [0x{addr:x}-0x{mend:x}] (vaddr=0x{vaddr:x}, offset=0x{offset:x})",
-                        mend = addr + size,
+                        "mmap [{ph}] [0x{start:x}-0x{end:x}] (vaddr=0x{vaddr:x}, offset=0x{offset:x})",
+                        start = seg_page_start,
+                        end = seg_page_start + size,
                         ph = DisplayPFlags(ph),
                     );
 
                     sys::mmap(
-                        addr as *mut c_void,
+                        seg_page_start as *mut c_void,
                         size,
                         prot,
                         MAP_PRIVATE | MAP_FIXED,
@@ -243,16 +244,17 @@ impl ElfHandle {
 
                 if file_map_size < total_map_size {
                     let mapping = unsafe {
-                        let addr = load_addr.add(file_map_size);
+                        let addr = seg_page_start + file_map_size;
                         let size = total_map_size - file_map_size;
                         log::trace!(
-                            "mmap [{ph}] [{addr:?}-0x{mend:x}] (vaddr=0x{vaddr:x}, anon)",
-                            mend = addr as usize + size,
+                            "mmap [{ph}] [0x{addr:x}-0x{mend:x}] (vaddr=0x{vaddr:x}, anon)",
+                            addr = addr,
+                            mend = addr + size,
                             ph = DisplayPFlags(ph),
                         );
 
                         sys::mmap(
-                            addr,
+                            addr as *mut c_void,
                             size,
                             prot,
                             MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS,
