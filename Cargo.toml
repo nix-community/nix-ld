@@ -11,7 +11,7 @@ test = false
 name = "tests"
 
 [dependencies]
-embedded-io = "0.6.1"
+embedded-io = "0.7.1"
 goblin = { version = "0.10.3", default-features = false, features = [
     "elf32",
     "elf64",
