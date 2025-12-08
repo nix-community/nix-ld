@@ -22,7 +22,7 @@ linux-raw-sys = { version = "0.12.0", default-features = false, features = [
     "general",
     "errno",
 ] }
-log = "0.4.28"
+log = "0.4.29"
 
 [build-dependencies]
 cc = "1.2.48"
