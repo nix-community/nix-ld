@@ -25,10 +25,10 @@ linux-raw-sys = { version = "0.12.0", default-features = false, features = [
 log = "0.4.28"
 
 [build-dependencies]
-cc = "1.2.48"
+cc = "1.2.49"
 
 [dev-dependencies]
-cc = "1.2.48"
+cc = "1.2.49"
 rstest = { version = "0.26.1", default-features = false }
 tempfile = "3.23.0"
 
