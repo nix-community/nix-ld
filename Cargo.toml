@@ -30,7 +30,7 @@ cc = "1.2.50"
 [dev-dependencies]
 cc = "1.2.50"
 rstest = { version = "0.26.1", default-features = false }
-tempfile = "3.23.0"
+tempfile = "3.24.0"
 
 [profile.dev]
 panic = "abort"
