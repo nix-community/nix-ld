@@ -99,5 +99,6 @@
     }
     // {
       nixosModules.nix-ld = import ./modules/nix-ld.nix;
+      nixosModules.default = self.outputs.nixosModules.nix-ld;
     };
 }
