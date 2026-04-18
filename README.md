@@ -162,10 +162,10 @@ with nix-ld will break the system.
 ### My python/nodejs/ruby/$interpreter libraries do not find the libraries configured by nix-ld
 
 Nix-ld is only used by unpatched executables that use the link loader at `/lib`
-or `/lib64`. If you use for example python from nixpkgs than it will not pick
+or `/lib64`. If you use for example python from nixpkgs then it will not pick
 up `NIX_LD_LIBRARY_PATH` and `NIX_LD` since these types of binaries are
 configured to use a glibc from the nix store. If you encounter these cases i.e.
-when you are trying to use python packages installed in a virtualenv than you
+when you are trying to use python packages installed in a virtualenv then you
 need to set `LD_LIBRARY_PATH` directly. You can also create yourself a wrapper
 like this:
 
