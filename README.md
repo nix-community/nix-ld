@@ -124,7 +124,7 @@ mkShell {
     openssl
     # ...
   ];
-  NIX_LD = lib.fileContents "${stdenv.cc}/nix-support/dynamic-linker";
+  NIX_LD = stdenv.cc.bintools.dynamicLinker;
 }
 ```
 
