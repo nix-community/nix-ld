@@ -172,9 +172,30 @@ like this:
 ```nix
 (pkgs.writeShellScriptBin "python" ''
   export LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH
-  exec ${pkgs.python3}/bin/python "$@"
+  exec -a "$0" ${pkgs.python3}/bin/python "$@"
 '')
 ```
+
+(without the `-a "$0"` argument, your wrapper will be skipped).
+
+If you don't want to load `NIX_LD_LIBRARY_PATH` globally in your main python, you can also create a different python executable, say `pythonld` that sets `NIX_LD_LIBRARY_PATH` like:
+```nix
+(pkgs.writeShellScriptBin "pythonld" ''
+  export LD_LIBRARY_PATH=$NIX_LD_LIBRARY_PATH
+  exec -a "$0" ${pkgs.python3}/bin/python "$@"
+'')
+```
+
+Then, create your `venv` as usual except that you should call `pythonld` like:
+```bash
+$ pythonld -m venv myvenv
+$ source myvenv/bin/activate
+$ pip install …
+$ python
+… you can use now your pip-installed libraries …
+```
+
+You can also use system-wide installed libraries in the venv by replacing in your nix expression `pkgs.python3` with something like `(pkgs.python3.withPackages (ps: with ps; [ numpy … ]))` and add the `--system-site-packages` option when creating the virtual environment.
 
 ## Development
 
