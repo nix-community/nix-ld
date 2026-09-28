@@ -24,6 +24,7 @@ use arch::{
     NIX_LD_SYSTEM_ENV_BYTES,
 };
 use args::{Args, EnvEdit, VarHandle};
+use heapless::format;
 use support::StackSpace;
 
 static mut ARGS: MaybeUninit<Args> = MaybeUninit::uninit();
@@ -184,7 +185,16 @@ extern "C" fn real_main() -> ! {
         .value();
 
     log::info!("Loading {nix_ld:?}");
-    let loader = elf::ElfHandle::open(nix_ld, pagesz).unwrap();
+    let loader = match elf::ElfHandle::open(nix_ld, pagesz) {
+        Ok(elf) => elf,
+        Err(err) => {
+            log::error!("Unable to open the original loader at {:?}: {:?}.\nCheck if your NIX_LD environment variable is set correctly.", 
+            nix_ld,
+            err);
+            panic!("original loader not found");
+        }
+    };
+
     let loader_map = loader.map().unwrap();
 
     let mut at_base = args.auxv_mut().at_base.as_mut().and_then(|base| {
