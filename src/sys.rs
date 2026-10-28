@@ -139,6 +139,18 @@ impl fmt::Write for File {
     }
 }
 
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Posix(errno) => write!(f, "errno {errno}"),
+            Self::PathTooLong => f.write_str("path too long"),
+            Self::Unknown => f.write_str("unknown error"),
+        }
+    }
+}
+
+impl core::error::Error for Error {}
+
 impl eio::Error for Error {
     fn kind(&self) -> embedded_io::ErrorKind {
         eio::ErrorKind::Other
