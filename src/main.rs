@@ -40,7 +40,7 @@ const DEFAULT_NIX_LD: &CStr = unsafe {
 };
 
 const DEFAULT_NIX_LD_LIBRARY_PATH: &[u8] = b"/run/current-system/sw/share/nix-ld/lib";
-const EMPTY_LD_LIBRARY_PATH_ENV: &CStr = c"LD_LIBRARY_PATH=";
+static mut EMPTY_LD_LIBRARY_PATH_ENV: [u8; 17] = *b"LD_LIBRARY_PATH=\0";
 
 #[derive(Default)]
 struct Context {
@@ -172,7 +172,7 @@ extern "C" fn real_main() -> ! {
         // precedence over config files.
         EnvEdit {
             entry: ptr::null(),
-            old_string: EMPTY_LD_LIBRARY_PATH_ENV.as_ptr().cast(),
+            old_string: (&raw mut EMPTY_LD_LIBRARY_PATH_ENV).cast(),
         }
     };
 
